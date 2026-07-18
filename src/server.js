@@ -372,4 +372,5 @@ const bootstrap = async () => {
   setTimeout(runCalendarEmailReminderScheduler, 7000);
 };
 
+// Bootstrap application
 bootstrap();

@@ -86,11 +86,11 @@ const safeSearch = async (req, res) => {
     } else {
       sortedTrends = savedItems.sort((a, b) => b.viralScore - a.viralScore);
     }
-    const top15Trends = sortedTrends.slice(0, 15);
+    const top20Trends = sortedTrends.slice(0, 20);
     
     res.json({
       success: true,
-      trends: top15Trends,
+      trends: top20Trends,
       instagramWarning: instagramWarning
     });
   } catch (error) {
@@ -105,15 +105,19 @@ const safeSearch = async (req, res) => {
  */
 const generateIdea = async (req, res) => {
   try {
-    const { trendItemId, targetPlatform } = req.body;
+    const { trendItemId, targetPlatform, trendItemData } = req.body;
     
-    if (!trendItemId) {
-      return res.status(400).json({ message: "trendItemId is required" });
+    let trendItem;
+    if (trendItemId) {
+      trendItem = await TrendItem.findById(trendItemId);
     }
     
-    const trendItem = await TrendItem.findById(trendItemId);
+    if (!trendItem && trendItemData) {
+      trendItem = trendItemData;
+    }
+    
     if (!trendItem) {
-      return res.status(404).json({ message: "Trend item not found" });
+      return res.status(400).json({ message: "trendItemId or trendItemData is required" });
     }
     
     const platformSuggestion = targetPlatform || "instagram";
@@ -121,25 +125,30 @@ const generateIdea = async (req, res) => {
     // Generate content idea using AI service
     const aiResponse = await AITrendGeneratorService.generateIdea(trendItem, platformSuggestion);
     
-    // Save generated idea in database
-    const newIdea = await GeneratedIdea.create({
-      userId: req.user.id,
-      trendItemId: trendItem._id,
-      niche: trendItem.niche,
-      platformSuggestion: platformSuggestion,
-      hook: aiResponse.hook,
-      script: aiResponse.script,
-      caption: aiResponse.caption,
-      hashtags: aiResponse.hashtags || [],
-      contentAngle: aiResponse.contentAngle || "",
-      targetAudience: aiResponse.targetAudience || "",
-      viralReason: aiResponse.viralReason || "",
-      videoFormat: aiResponse.videoFormat || ""
-    });
+    // Save generated idea in database if we have a logged-in user
+    let newIdea = null;
+    if (req.user) {
+      newIdea = await GeneratedIdea.create({
+        userId: req.user.id,
+        trendItemId: trendItem._id || null,
+        niche: trendItem.niche,
+        platformSuggestion: platformSuggestion,
+        hook: aiResponse.hook,
+        hooks: aiResponse.hooks || [aiResponse.hook],
+        cta: aiResponse.cta || "",
+        script: aiResponse.script,
+        caption: aiResponse.caption,
+        hashtags: aiResponse.hashtags || [],
+        contentAngle: aiResponse.contentAngle || "",
+        targetAudience: aiResponse.targetAudience || "",
+        viralReason: aiResponse.viralReason || "",
+        videoFormat: aiResponse.videoFormat || ""
+      });
+    }
     
     res.status(201).json({
       success: true,
-      idea: newIdea
+      idea: newIdea || aiResponse
     });
   } catch (error) {
     console.error("[Trend Controller] generateIdea error:", error);

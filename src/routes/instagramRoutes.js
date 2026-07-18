@@ -23,6 +23,7 @@ const {
   proxyInstagramImage,
   connectInstagram,
   getSafeSignals,
+  lookupCompetitor
 } = require("../controllers/instagramController");
 
 // Multer for Instagram post uploads — keep files with original extension
@@ -58,6 +59,9 @@ router.get("/callback", handleCallback);
 
 // Route to proxy Instagram/Facebook images to avoid CORS and hotlink blocks
 router.get("/proxy-image", proxyInstagramImage);
+
+// Public competitor profile lookup (no auth required)
+router.get("/lookup-competitor", lookupCompetitor);
 
 // Profile and analytics routes
 router.get("/profile", protect, getProfile);

@@ -9,7 +9,8 @@ const {
   getChannelAnalytics,
   getVideos,
   disconnectYouTube,
-  uploadVideo
+  uploadVideo,
+  lookupCompetitor
 } = require('../controllers/youtubeController');
 
 // Configure multer storage for video uploads
@@ -46,6 +47,9 @@ router.post('/upload', protect, ytUpload.single('video'), uploadVideo);
 router.get('/analytics', protect, getChannelAnalytics);
 router.get('/videos', protect, getVideos);
 router.post('/disconnect', protect, disconnectYouTube);
+
+// Public competitor lookup (no auth required — uses API key)
+router.get('/lookup-competitor', lookupCompetitor);
 
 module.exports = router;
 

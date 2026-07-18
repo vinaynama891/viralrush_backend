@@ -1,4 +1,5 @@
 const InstagramAccount = require("../models/InstagramAccount");
+const AIService = require("../services/aiService");
 
 const META_VERSION = process.env.META_GRAPH_VERSION || "v23.0";
 const AutomationRule = require("../models/AutomationRule");
@@ -1607,4 +1608,51 @@ module.exports = {
   proxyInstagramImage,
   connectInstagram,
   getSafeSignals,
+};
+
+const lookupCompetitor = async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || !q.trim()) {
+      return res.status(400).json({ success: false, message: 'Query parameter "q" is required' });
+    }
+
+    const data = await AIService.lookupInstagramProfile(q);
+    if (!data) {
+      return res.status(404).json({ success: false, message: `Could not find Instagram profile for "${q}"` });
+    }
+
+    res.json({
+      success: true,
+      data
+    });
+  } catch (err) {
+    console.error("[Instagram] lookupCompetitor error:", err);
+    res.status(500).json({ success: false, message: 'Failed to lookup Instagram profile', error: err.message });
+  }
+};
+
+module.exports = {
+  getAuthUrl,
+  handleCallback,
+  getProfile,
+  getAnalytics,
+  getMedia,
+  publishPost,
+  schedulePost,
+  getScheduledPosts,
+  deleteScheduledPost,
+  disconnectInstagram,
+  verifyWebhook,
+  receiveWebhookEvent,
+  getConversations,
+  getConversationMessages,
+  sendConversationReply,
+  getDMInbox,
+  sendDMMessage,
+  getPostComments,
+  proxyInstagramImage,
+  connectInstagram,
+  getSafeSignals,
+  lookupCompetitor
 };

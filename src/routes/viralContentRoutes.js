@@ -5,6 +5,7 @@ const {
   getSearchHistory,
   getSearchById,
   refineVideoContent,
+  instagramTranscribe,
 } = require("../controllers/viralContentController");
 
 const router = express.Router();
@@ -21,6 +22,12 @@ router.post("/find", protect, findViralContent);
  * Refine a specific video/post with Gemini AI analysis to suggest a script, caption, and hashtags.
  */
 router.post("/refine", protect, refineVideoContent);
+
+/**
+ * POST /api/viral-content/instagram-transcribe
+ * Paste an Instagram link, scrape caption/title, and generate 3 scripts in Hindi/English/Hinglish.
+ */
+router.post("/instagram-transcribe", protect, instagramTranscribe);
 
 /**
  * GET /api/viral-content/history

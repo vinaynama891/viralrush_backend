@@ -405,3 +405,132 @@ exports.uploadVideo = async (req, res) => {
   }
 };
 
+// ────────────────────────────────────────────────────────────────────────────
+// GET /api/youtube/lookup-competitor?q=<channel name or handle>
+// Searches for a YouTube channel by name/handle and returns real stats
+// ────────────────────────────────────────────────────────────────────────────
+exports.lookupCompetitor = async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || !q.trim()) {
+      return res.status(400).json({ success: false, message: 'Query parameter "q" is required' });
+    }
+
+    const apiKey = getYouTubeApiKey();
+    if (!apiKey) {
+      return res.status(500).json({ success: false, message: 'YouTube API key not configured' });
+    }
+
+    const youtube = google.youtube({ version: 'v3', auth: apiKey });
+    const searchTerm = q.trim().replace(/^@/, '');
+
+    // Step 1: Search for the channel
+    const searchRes = await youtube.search.list({
+      part: 'snippet',
+      q: searchTerm,
+      type: 'channel',
+      maxResults: 1
+    });
+
+    if (!searchRes.data.items || searchRes.data.items.length === 0) {
+      return res.status(404).json({ success: false, message: `No YouTube channel found for "${searchTerm}"` });
+    }
+
+    const channelId = searchRes.data.items[0].snippet.channelId;
+    const snippet = searchRes.data.items[0].snippet;
+
+    // Step 2: Get detailed statistics for that channel
+    const channelRes = await youtube.channels.list({
+      part: 'snippet,statistics,brandingSettings',
+      id: channelId
+    });
+
+    if (!channelRes.data.items || channelRes.data.items.length === 0) {
+      return res.status(404).json({ success: false, message: 'Channel details not found' });
+    }
+
+    const ch = channelRes.data.items[0];
+    const stats = ch.statistics;
+    const chSnippet = ch.snippet;
+
+    // Step 3: Get channel's top 15 videos sorted by view count
+    let topVideos = [];
+    try {
+      const videosRes = await youtube.search.list({
+        part: 'id,snippet',
+        channelId: channelId,
+        maxResults: 15,
+        order: 'viewCount',
+        type: 'video'
+      });
+
+      if (videosRes.data.items && videosRes.data.items.length > 0) {
+        const videoIds = videosRes.data.items.map(item => item.id.videoId).filter(Boolean).join(',');
+        if (videoIds) {
+          const statsRes = await youtube.videos.list({
+            part: 'id,snippet,statistics,contentDetails',
+            id: videoIds
+          });
+
+          if (statsRes.data.items) {
+            topVideos = statsRes.data.items.map(v => {
+              // Parse ISO 8601 duration (PT4M13S) to human readable
+              const isoDuration = v.contentDetails?.duration || '';
+              const dMatch = isoDuration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+              let durationStr = 'N/A';
+              let durationSeconds = 0;
+              if (dMatch) {
+                const h = parseInt(dMatch[1] || '0', 10);
+                const m = parseInt(dMatch[2] || '0', 10);
+                const s = parseInt(dMatch[3] || '0', 10);
+                durationSeconds = h * 3600 + m * 60 + s;
+                const parts = [];
+                if (h) parts.push(`${h}h`);
+                if (m) parts.push(`${m}m`);
+                if (s) parts.push(`${s}s`);
+                durationStr = parts.join(' ') || 'N/A';
+              }
+              return {
+                id: v.id,
+                title: v.snippet?.title || 'No Title',
+                thumbnail: v.snippet?.thumbnails?.high?.url || v.snippet?.thumbnails?.medium?.url || v.snippet?.thumbnails?.default?.url || '',
+                publishedAt: v.snippet?.publishedAt || '',
+                views: v.statistics?.viewCount || '0',
+                likes: v.statistics?.likeCount || '0',
+                comments: v.statistics?.commentCount || '0',
+                duration: durationStr,
+                durationSeconds: durationSeconds,
+                link: `https://www.youtube.com/watch?v=${v.id}`
+              };
+            });
+          }
+        }
+      }
+    } catch (videoErr) {
+      console.warn('[YouTube] Failed to fetch top videos for competitor:', videoErr.message);
+    }
+
+    res.json({
+      success: true,
+      data: {
+        channelId: channelId,
+        name: chSnippet.title,
+        handle: chSnippet.customUrl || `@${searchTerm}`,
+        description: chSnippet.description || '',
+        thumbnail: chSnippet.thumbnails?.high?.url || chSnippet.thumbnails?.medium?.url || chSnippet.thumbnails?.default?.url || '',
+        subscriberCount: stats.subscriberCount || '0',
+        videoCount: stats.videoCount || '0',
+        viewCount: stats.viewCount || '0',
+        hiddenSubscriberCount: stats.hiddenSubscriberCount || false,
+        publishedAt: chSnippet.publishedAt || '',
+        country: chSnippet.country || '',
+        topVideos: topVideos
+      }
+    });
+
+  } catch (err) {
+    console.error('[YouTube] lookupCompetitor error:', err);
+    res.status(500).json({ success: false, message: 'Failed to lookup competitor channel', error: err.message });
+  }
+};
+

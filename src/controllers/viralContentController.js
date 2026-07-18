@@ -1,3 +1,4 @@
+const axios = require("axios");
 const YouTubeService           = require("../services/youtubeService");
 const GeminiViralService       = require("../services/geminiViralService");
 const ViralContentSearch       = require("../models/ViralContentSearch");
@@ -267,7 +268,7 @@ const getSearchById = async (req, res) => {
  */
 const refineVideoContent = async (req, res) => {
   try {
-    const { videoId, title, description, platform, channelTitle, targetLanguage } = req.body;
+    const { videoId, title, description, platform, channelTitle, targetLanguage, step, selectedHook, selectedScript, videoDuration } = req.body;
 
     if (!title) {
       return res.status(400).json({
@@ -278,7 +279,7 @@ const refineVideoContent = async (req, res) => {
 
     const cleanPlatform = (platform || "youtube").toLowerCase().trim();
 
-    console.log(`[ViralContent] User ${req.user?.id || req.user?._id} refining: "${title}" | platform: ${cleanPlatform} | targetLanguage: ${targetLanguage}`);
+    console.log(`[ViralContent] User ${req.user?.id || req.user?._id} refining: "${title}" | platform: ${cleanPlatform} | targetLanguage: ${targetLanguage} | step: ${step} | duration: ${videoDuration}`);
 
     const refined = await GeminiViralService.refineVideoContent({
       title,
@@ -286,6 +287,10 @@ const refineVideoContent = async (req, res) => {
       platform: cleanPlatform,
       channelTitle,
       targetLanguage,
+      step,
+      selectedHook,
+      selectedScript,
+      videoDuration,
     });
 
     return res.status(200).json({
@@ -302,5 +307,67 @@ const refineVideoContent = async (req, res) => {
   }
 };
 
-module.exports = { findViralContent, getSearchHistory, getSearchById, refineVideoContent };
+const instagramTranscribe = async (req, res) => {
+  try {
+    const { url, language, niche, caption: userCaption } = req.body;
+
+    if (!url) {
+      return res.status(400).json({
+        success: false,
+        message: "Instagram URL is required.",
+      });
+    }
+
+    console.log(`[ViralContent] User ${req.user?.id || req.user?._id} transcribing Instagram Reel: ${url} | language: ${language}`);
+
+    let caption = userCaption || "";
+    
+    // Scrape only if the user hasn't provided a transcript/caption fallback
+    if (!caption) {
+      try {
+        const response = await axios.get(url, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+          },
+          timeout: 5000
+        });
+        const html = response.data || "";
+        const ogDescMatch = html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i) ||
+                            html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:description["']/i);
+        const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+        
+        let desc = ogDescMatch ? ogDescMatch[1] : "";
+        let title = titleMatch ? titleMatch[1] : "";
+
+        if (desc) {
+          desc = desc.replace(/on Instagram:.*$/, "").trim();
+        }
+
+        caption = desc || title || "";
+      } catch (scrapeErr) {
+        console.warn("[ViralContent] Instagram scrape failed, using fallback:", scrapeErr.message);
+      }
+    }
+
+    const result = await GeminiViralService.generateInstagramScripts({
+      caption: caption || `Instagram Reel at ${url}`,
+      niche,
+      targetLanguage: language
+    });
+
+    return res.status(200).json({
+      success: true,
+      result,
+    });
+  } catch (err) {
+    console.error("[ViralContent] Error in instagramTranscribe:", err.message);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to transcribe Instagram video. Please try again.",
+      error: process.env.NODE_ENV === "development" ? err.message : undefined,
+    });
+  }
+};
+
+module.exports = { findViralContent, getSearchHistory, getSearchById, refineVideoContent, instagramTranscribe };
 

@@ -39,18 +39,27 @@ class AIService {
           config: config
         });
         const raw = (result.text || "").trim();
-        const cleaned = raw
+        let cleaned = raw
           .replace(/^```json\s*/i, "")
           .replace(/^```\s*/i, "")
           .replace(/```\s*$/i, "")
           .trim();
-        return JSON.parse(cleaned);
+        
+        try {
+          return JSON.parse(cleaned);
+        } catch (parseErr) {
+          const match = cleaned.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+          if (match) {
+            return JSON.parse(match[0]);
+          }
+          throw parseErr;
+        }
       } catch (err) {
         console.error(`[AI Service] Gemini model ${modelName} call failed:`, err.message);
-        // If quota is exhausted (429), skip remaining models immediately
+        // If quota is exhausted (429), skip and try other models
         if (err.message && (err.message.includes("RESOURCE_EXHAUSTED") || err.message.includes("429") || err.message.includes("quota"))) {
-          console.warn("[AI Service] Quota exhausted — skipping remaining models.");
-          break;
+          console.warn("[AI Service] Quota exhausted — trying next model in fallback list.");
+          continue;
         }
       }
     }
@@ -387,6 +396,61 @@ Return ONLY a valid JSON object matching this exact schema:
         videoUrl: isYt ? "https://www.youtube.com/watch?v=dQw4w9WgXcQ" : "https://www.instagram.com/p/Cm1L2-0jS8X/"
       }
     ];
+  }
+
+  static async lookupInstagramProfile(username) {
+    const cleanUsername = username.trim().replace(/\s+/g, "").replace(/^@/, "");
+    const prompt = `You are an expert social media scraper and researcher.
+A user wants to find real-world statistics for the Instagram profile of: "@${cleanUsername}".
+
+IMPORTANT: Use the Google Search tool to search for the Instagram page of "${cleanUsername}" (e.g. search "instagram.com/${cleanUsername} followers posts bio").
+Find their actual:
+1. Full Name/Name
+2. Followers count (in numbers, e.g. 1250000 for 1.25M)
+3. Posts count (number of posts uploaded)
+4. Biography/Bio description
+5. Estimate their total views (sum of views on their recent reels/videos found in search, or estimate based on followers count * posts * 0.1)
+6. Extract or generate a list of their top 15 most popular/viral Reels or posts. For each reel, provide:
+   - title: a short catchy description/title of what the reel is about.
+   - views: actual or estimated view count as a number.
+   - likes: actual or estimated like count as a number.
+   - comments: actual or estimated comment count as a number.
+   - link: a realistic Instagram reel URL link (e.g., https://www.instagram.com/reel/B8_47dfg/).
+
+If you find a valid profile picture url, include it in "avatar". Otherwise, use a premium unsplash avatar placeholder (e.g. 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150').
+
+Return ONLY a valid JSON object matching this exact schema (no markdown, no other text):
+{
+  "name": "Full Name",
+  "handle": "@${cleanUsername}",
+  "followersCount": 1250000,
+  "postsCount": 420,
+  "bio": "Creator of fine things | Daily tips...",
+  "avatar": "https://...",
+  "totalViews": 8500000,
+  "topVideos": [
+    {
+      "title": "Title/Description of reel 1",
+      "views": 1500000,
+      "likes": 85000,
+      "comments": 420,
+      "link": "https://www.instagram.com/reel/Cm1L2-0jS8X/"
+    }
+  ]
+}`;
+
+    try {
+      const config = {
+        tools: [{ googleSearch: {} }]
+      };
+      const data = await this.generateWithGemini(prompt, config);
+      if (data) {
+        return data;
+      }
+    } catch (err) {
+      console.error("[AI Service] lookupInstagramProfile failed:", err.message);
+    }
+    return null;
   }
 }
 
