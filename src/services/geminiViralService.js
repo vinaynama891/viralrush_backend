@@ -483,11 +483,11 @@ Base all analysis on real ${platformName} trends and best practices.`;
    * @param {Object} params - { title, description, platform, channelTitle }
    * @returns {Object} Refinement results matching the RefinedContent schema
    */
-  static async refineVideoContent({ title, description, platform = "youtube", channelTitle = "", targetLanguage = "auto", step = "all", selectedHook = "", selectedScript = "", videoDuration = "auto" }) {
+  static async refineVideoContent({ title, description, platform = "youtube", channelTitle = "", targetLanguage = "auto", step = "all", selectedHook = "", selectedScript = "", videoDuration = "auto", originalTranscript = "" }) {
     if (step === "hooks") {
       return this.generateHooksOnly({ title, description, platform, channelTitle, targetLanguage });
     } else if (step === "scripts") {
-      return this.generateScriptsOnly({ title, description, platform, channelTitle, targetLanguage, selectedHook, videoDuration });
+      return this.generateScriptsOnly({ title, description, platform, channelTitle, targetLanguage, selectedHook, videoDuration, originalTranscript });
     } else if (step === "final") {
       return this.generateFinalRefinement({ title, description, platform, channelTitle, targetLanguage, selectedHook, selectedScript });
     }
@@ -722,7 +722,7 @@ Return ONLY a valid JSON object matching this exact schema (no markdown formatti
   /**
    * Generates only 3 script variations based on a selected hook.
    */
-  static async generateScriptsOnly({ title, description, platform = "youtube", channelTitle = "", targetLanguage = "auto", selectedHook, videoDuration = "auto" }) {
+  static async generateScriptsOnly({ title, description, platform = "youtube", channelTitle = "", targetLanguage = "auto", selectedHook, videoDuration = "auto", originalTranscript = "" }) {
     const genAI = this._getClient();
     const platformName = platform.charAt(0).toUpperCase() + platform.slice(1);
 
@@ -797,6 +797,18 @@ CRITICAL SCRIPT LENGTH REQUIREMENT - THIS IS THE MOST IMPORTANT RULE:
       durationInstruction = `The target script length should be around 60-90 seconds read time (approximately 130-200 words) for a social media video.`;
     }
 
+    let transcriptInstruction = "";
+    if (originalTranscript) {
+      transcriptInstruction = `
+CRITICAL SPEECH-TO-TEXT TRANSCRIPT REFERENCE:
+Here is the actual spoken transcription of the original video:
+"${originalTranscript}"
+
+You MUST write the 3 script variations by adapting, refining, and extending this original transcription. 
+Specifically, each script variation MUST be approximately 50 words longer than this original transcript to add extra clarity, depth, and engagement details.
+Use the transcription as the source of what was spoken, retain its core message, but make it better, and add approximately 50 additional words of valuable content to it.`;
+    }
+
     const prompt = `You are an expert social media growth strategist and copywriter.
 I want to write 3 distinct video script variations based on a specific hook for a video/post on ${platformName}.
 
@@ -804,6 +816,8 @@ Here is the details of the post:
 - Title: "${title}"
 - Description: "${description || "No description provided."}"
 - Selected Hook (Opening hook already chosen by user): "${selectedHook}"
+
+${transcriptInstruction}
 
 CRITICAL DURATION REQUIREMENT:
 ${durationInstruction}

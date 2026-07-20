@@ -1,5 +1,6 @@
 const InstagramAccount = require("../models/InstagramAccount");
 const AIService = require("../services/aiService");
+const ApifyInstagramService = require("../services/apifyInstagramService");
 
 const META_VERSION = process.env.META_GRAPH_VERSION || "v23.0";
 const AutomationRule = require("../models/AutomationRule");
@@ -1617,7 +1618,7 @@ const lookupCompetitor = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Query parameter "q" is required' });
     }
 
-    const data = await AIService.lookupInstagramProfile(q);
+    const data = await ApifyInstagramService.lookupProfile(q);
     if (!data) {
       return res.status(404).json({ success: false, message: `Could not find Instagram profile for "${q}"` });
     }

@@ -243,4 +243,63 @@ async function downloadReel(url, tempDir, filename) {
   });
 }
 
-module.exports = { downloadReel, getReelMetadata };
+/**
+ * Downloads audio stream only (extremely fast, suitable for transcription).
+ */
+async function downloadAudioOnly(url, tempDir, filename) {
+  const meta = await getReelMetadata(url);
+  const duration = meta.duration || 0;
+  
+  // Support up to 20 minutes (1200s) for YouTube transcription
+  const maxAudioDuration = 1200; 
+  if (duration > maxAudioDuration) {
+    throw new ApiError(`Video duration (${duration}s) exceeds transcription limit of ${maxAudioDuration}s.`, 400, "VIDEO_TOO_LONG");
+  }
+
+  const outputPath = path.join(tempDir, filename);
+
+  return new Promise((resolve, reject) => {
+    console.log(`[InstagramDownloader] Downloading audio only to: ${outputPath}`);
+
+    const args = [
+      "--no-playlist",
+      "-f",
+      "bestaudio",
+      "-o",
+      outputPath
+    ];
+
+    const cookiesPath = path.join(__dirname, "../../cookies.txt");
+    if (fs.existsSync(cookiesPath)) {
+      args.push("--cookies", cookiesPath);
+    }
+
+    args.push(url);
+
+    const ytDlp = spawn(YT_DLP_PATH, args);
+    let stderr = "";
+
+    ytDlp.stderr.on("data", (data) => {
+      stderr += data.toString();
+    });
+
+    ytDlp.on("close", (code) => {
+      if (code !== 0) {
+        console.error(`[InstagramDownloader] Audio download failed (exit code ${code}). Stderr:`, stderr);
+        return reject(new ApiError("Failed to download audio.", 500, "AUDIO_DOWNLOAD_FAILED"));
+      }
+
+      if (!fs.existsSync(outputPath)) {
+        return reject(new ApiError("Downloaded audio file not found on disk.", 500, "AUDIO_DOWNLOAD_FAILED"));
+      }
+
+      resolve({
+        audioPath: outputPath,
+        duration: Math.round(duration) || 0,
+        title: meta.title || "Audio stream"
+      });
+    });
+  });
+}
+
+module.exports = { downloadReel, getReelMetadata, downloadAudioOnly };

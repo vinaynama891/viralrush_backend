@@ -2,6 +2,12 @@ const axios = require("axios");
 const YouTubeService           = require("../services/youtubeService");
 const GeminiViralService       = require("../services/geminiViralService");
 const ViralContentSearch       = require("../models/ViralContentSearch");
+const fs = require("fs");
+const path = require("path");
+const crypto = require("crypto");
+const { downloadReel, downloadAudioOnly } = require("../services/instagramDownloaderService");
+const { extractAudio } = require("../services/audioExtractionService");
+const { transcribeAudio } = require("../services/transcriptionService");
 
 /**
  * POST /api/viral-content/find
@@ -267,8 +273,9 @@ const getSearchById = async (req, res) => {
  * Calls GeminiViralService to suggest refined script, caption, and hashtags.
  */
 const refineVideoContent = async (req, res) => {
+  let tempDir = null;
   try {
-    const { videoId, title, description, platform, channelTitle, targetLanguage, step, selectedHook, selectedScript, videoDuration } = req.body;
+    const { videoId, title, description, platform, channelTitle, targetLanguage, step, selectedHook, selectedScript, videoDuration, videoUrl } = req.body;
 
     if (!title) {
       return res.status(400).json({
@@ -278,6 +285,39 @@ const refineVideoContent = async (req, res) => {
     }
 
     const cleanPlatform = (platform || "youtube").toLowerCase().trim();
+    let originalTranscript = "";
+
+    // If step is scripts and we have videoUrl, download and transcribe!
+    if (step === "scripts" && videoUrl) {
+      try {
+        console.log(`[ViralContent] Downloading and transcribing video: ${videoUrl} for step: scripts`);
+        const uuid = crypto.randomUUID();
+        tempDir = path.join(__dirname, "../../temp", uuid);
+        fs.mkdirSync(tempDir, { recursive: true });
+
+        // Download raw audio stream (extremely fast, works for both YouTube and Instagram)
+        const downloadRes = await downloadAudioOnly(videoUrl, tempDir, "raw_audio");
+        
+        // Extract / convert audio to mp3 at 16kHz
+        const audioPath = await extractAudio(downloadRes.audioPath, tempDir, "audio.mp3");
+
+        // Transcribe Speech to Text
+        const transcriptionRes = await transcribeAudio(audioPath, targetLanguage || "auto");
+        originalTranscript = transcriptionRes?.transcript || transcriptionRes?.text || (typeof transcriptionRes === "string" ? transcriptionRes : "");
+        console.log(`[ViralContent] Transcription complete. Characters: ${originalTranscript.length}`);
+      } catch (transcribeErr) {
+        console.error("[ViralContent] Transcription process failed:", transcribeErr.message);
+      } finally {
+        // Cleanup temp files
+        if (tempDir && fs.existsSync(tempDir)) {
+          try {
+            fs.rmSync(tempDir, { recursive: true, force: true });
+          } catch (cleanupErr) {
+            console.error("[ViralContent] Cleanup of tempDir failed:", cleanupErr.message);
+          }
+        }
+      }
+    }
 
     console.log(`[ViralContent] User ${req.user?.id || req.user?._id} refining: "${title}" | platform: ${cleanPlatform} | targetLanguage: ${targetLanguage} | step: ${step} | duration: ${videoDuration}`);
 
@@ -291,7 +331,12 @@ const refineVideoContent = async (req, res) => {
       selectedHook,
       selectedScript,
       videoDuration,
+      originalTranscript,
     });
+
+    if (originalTranscript) {
+      refined.transcript = originalTranscript;
+    }
 
     return res.status(200).json({
       success: true,

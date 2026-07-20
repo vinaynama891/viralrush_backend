@@ -453,15 +453,19 @@ exports.lookupCompetitor = async (req, res) => {
     const stats = ch.statistics;
     const chSnippet = ch.snippet;
 
-    // Step 3: Get channel's top 15 videos sorted by view count
+    // Step 3: Get channel's top 15 videos sorted by view count (from the last 6 months)
     let topVideos = [];
     try {
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
       const videosRes = await youtube.search.list({
         part: 'id,snippet',
         channelId: channelId,
         maxResults: 15,
         order: 'viewCount',
-        type: 'video'
+        type: 'video',
+        publishedAfter: sixMonthsAgo.toISOString()
       });
 
       if (videosRes.data.items && videosRes.data.items.length > 0) {
