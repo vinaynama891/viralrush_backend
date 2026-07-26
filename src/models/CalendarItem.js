@@ -8,6 +8,7 @@ const calendarItemSchema = new mongoose.Schema(
     contentType: { type: String, required: true },
     scheduledAt: { type: Date, required: true },
     status: { type: String, default: "Planned" },
+    notes: { type: String, default: "" },
     remindersSent: { type: [String], default: [] },
   },
   { timestamps: true }

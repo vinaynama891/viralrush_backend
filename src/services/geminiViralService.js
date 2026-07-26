@@ -506,6 +506,10 @@ Base all analysis on real ${platformName} trends and best practices.`;
       langInstruction = `AUTO-DETECT LANGUAGE RULE: Detect the primary language of the original video's Title and Description. If it is Hindi or Hinglish, write the values of "originalScript", "title", "script.hook", "script.hooks", "script.structure", "script.fullScript", and "caption" in that exact language/mix. If it is English, write them in English. Match the tone and language of the original creator.`;
     }
 
+    const captionRefineInstruction = platform.toLowerCase() === "instagram"
+      ? "Create an EXTREMELY SHORT, punchy, and concise Instagram Caption/Description. It must be at most 1-2 short sentences plus a very brief Call to Action (CTA), keeping the total word count under 30-40 words. Do not make it long or detailed."
+      : "Create a viral-ready Caption/Description that is optimized for engagement and click-through rate.";
+
     const prompt = `You are an expert social media growth strategist and copywriter.
 I want to analyze and refine a video/post from ${platformName}.
 
@@ -522,7 +526,7 @@ Please analyze this content and provide improvements to make it go viral. Specif
 1. Reconstruct or estimate a realistic word-for-word transcript/script that was used in the original video (30-60 seconds read time) based on the title, description/caption, and context.
 2. Suggest an improved catchy Title.
 3. Draft a complete, high-converting refined video Script. Generate 3 distinct scroll-stopping hook variations (e.g. Curiosity, Bold/Controversial, and Storytelling/Value-First) in the target language. Also provide a structure and a complete spoken script.
-4. Create a viral-ready Caption/Description that is optimized for engagement and click-through rate.
+4. ${captionRefineInstruction}
 5. Provide a list of the 10-15 best-suited Hashtags for this content.
 
 Return ONLY a valid JSON object matching this exact schema (no markdown formatting, no explanation, no code fences):
@@ -959,6 +963,10 @@ Return ONLY a valid JSON object matching this exact schema (no markdown formatti
       langInstruction = `AUTO-DETECT LANGUAGE RULE: Detect the language of the selected script. If it is Hindi or Hinglish, write the caption/description in that exact language/mix.`;
     }
 
+    const captionFinalInstruction = platform.toLowerCase() === "instagram"
+      ? "An EXTREMELY SHORT, punchy, and concise Instagram Caption/Description. It must be at most 1-2 short sentences plus a very brief Call to Action (CTA), keeping the total word count under 30-40 words. Do not make it long or detailed."
+      : "A viral-ready Caption/Description that is optimized for engagement, includes relevant emojis, questions, and a Call to Action (CTA).";
+
     const prompt = `You are an expert social media growth strategist and copywriter.
 I want to finalize the viral content optimization package for a video/post on ${platformName}.
 
@@ -973,7 +981,7 @@ ${langInstruction}
 
 Please generate:
 1. An improved, high-converting catchy Title.
-2. A viral-ready Caption/Description that is optimized for engagement, includes relevant emojis, questions, and a Call to Action (CTA).
+2. ${captionFinalInstruction}
 3. A list of the 10-15 best-suited Hashtags (without the hash symbol) tailored to this content.
 
 Return ONLY a valid JSON object matching this exact schema (no markdown formatting, no explanation, no code fences):
@@ -1039,15 +1047,14 @@ Return ONLY a valid JSON object matching this exact schema (no markdown formatti
     const words = cleanTopic.split(/\s+/).filter(w => w.length > 3);
     const keyword = words[0] || "viral";
 
-    let titleIdea = `🔥 Unlocking the Secret to ${cleanTopic}`;
-    let caption = `Unpopular opinion: Most people are doing "${cleanTopic}" wrong... 😳\n\nIf you've been struggling to see results, here's your sign to change your approach. Save this video so you don't forget it, and let me know your thoughts in the comments! 👇\n\n#viral #${keyword.toLowerCase().replace(/[^a-z0-9]/g, "")} #success #tips`;
+    let caption = `Unpopular opinion: Most people do "${cleanTopic}" wrong. 😳 Save and try this! 👇\n\n#viral #${keyword.toLowerCase().replace(/[^a-z0-9]/g, "")} #tips`;
 
     if (targetLanguage === "hindi") {
       titleIdea = `🔥 ${cleanTopic} का गुप्त रहस्य जानिए`;
-      caption = `अलोकप्रिय राय: अधिकांश लोग "${cleanTopic}" को गलत तरीके से कर रहे हैं... 😳\n\nयदि आप इसके साथ परिणाम देखने के लिए संघर्ष कर रहे हैं, तो अपना दृष्टिकोण बदलने का यह सही समय है। इस वीडियो को सेव करें और कमेंट्स में अपने विचार बताएं! 👇\n\n#viral #${keyword.toLowerCase().replace(/[^a-z0-9]/g, "")} #success #tips`;
+      caption = `अलोकप्रिय राय: अधिकांश लोग "${cleanTopic}" को गलत कर रहे हैं। 😳 सेव करें और आज़माएं! 👇\n\n#viral #${keyword.toLowerCase().replace(/[^a-z0-9]/g, "")} #tips`;
     } else if (targetLanguage === "hinglish") {
       titleIdea = `🔥 ${cleanTopic} Ka Secret Blueprint`;
-      caption = `Unpopular opinion: Zyada tar log "${cleanTopic}" ko galat tarike se kar rahe hai... 😳\n\nKaise laga aapko ye video? Comment karke zaroor bataye aur aisi videos ke liye follow karein! 👇\n\n#viral #${keyword.toLowerCase().replace(/[^a-z0-9]/g, "")} #success #tips`;
+      caption = `Unpopular opinion: Zyada tar log "${cleanTopic}" galat kar rahe hai. 😳 Save karein aur try karein! 👇\n\n#viral #${keyword.toLowerCase().replace(/[^a-z0-9]/g, "")} #tips`;
     }
 
     return {
@@ -1087,7 +1094,7 @@ Return ONLY a valid JSON object matching this exact schema (no markdown formatti
       { type: "Bold Promise Hook", text: `I will show you the exact 3-step formula to dominate "${cleanTopic}" in under 60 seconds.` }
     ];
     let fullScript = `Stop scrolling! If you want to know how to actually master "${cleanTopic}", you need to watch this until the end. Most people struggle with this because they focus on the wrong approach. Here is the exact fix: First, optimize your overall strategy. Second, implement consistency immediately. Do this for 30 days and watch your metrics explode. If you found this helpful, make sure to follow for more tips and share this with a friend!`;
-    let caption = `Unpopular opinion: Most people are doing "${cleanTopic}" wrong... 😳\n\nIf you've been struggling to see results, here's your sign to change your approach. Save this video so you don't forget it, and let me know your thoughts in the comments! 👇\n\n#viral #${keyword1.toLowerCase().replace(/[^a-z0-9]/g, "")} #success #tips`;
+    let caption = `Unpopular opinion: Most people do "${cleanTopic}" wrong. 😳 Save and try this! 👇\n\n#viral #${keyword1.toLowerCase().replace(/[^a-z0-9]/g, "")} #tips`;
 
     if (targetLanguage === "hindi") {
       originalScript = `नमस्ते दोस्तों, आज हम देख रहे हैं "${cleanTitle}"। हम इसे इस तरह से समझ सकते हैं...`;
@@ -1098,7 +1105,7 @@ Return ONLY a valid JSON object matching this exact schema (no markdown formatti
         { type: "बड़ा वादा (Bold Promise)", text: `मैं आपको सिर्फ 60 सेकंड में "${cleanTopic}" में महारत हासिल करने का बिल्कुल सही फॉर्मूला दिखाऊंगा।` }
       ];
       fullScript = `रुकिए! अगर आप "${cleanTopic}" में बेहतरीन परिणाम चाहते हैं, तो इस वीडियो को अंत तक जरूर देखें। ज्यादातर लोग इसमें असफल होते हैं क्योंकि वे गलत तरीका अपनाते हैं। आज से आपको केवल एक चीज बदलनी है: अपनी स्ट्रेटेजी और निरंतरता पर ध्यान दें। इसे 30 दिनों तक करें और अपने परिणाम देखें। अगर आपको यह मददगार लगा, तो फॉलो करना न भूलें!`;
-      caption = `अलोकप्रिय राय: अधिकांश लोग "${cleanTopic}" को गलत तरीके से कर रहे हैं... 😳\n\nयदि आप इसके साथ परिणाम देखने के लिए संघर्ष कर रहे हैं, तो अपना दृष्टिकोण बदलने का यह सही समय है। इस वीडियो को सेव करें और कमेंट्स में अपने विचार बताएं! 👇\n\n#viral #${keyword1.toLowerCase().replace(/[^a-z0-9]/g, "")} #success #tips`;
+      caption = `अलोकप्रिय राय: अधिकांश लोग "${cleanTopic}" को गलत कर रहे हैं। 😳 सेव करें और आज़माएं! 👇\n\n#viral #${keyword1.toLowerCase().replace(/[^a-z0-9]/g, "")} #tips`;
     } else if (targetLanguage === "hinglish") {
       originalScript = `Hey dosto, aaj hum dekh rahe hai "${cleanTitle}" ke baare me. Isko hum aise samajh sakte hai...`;
       hook = `Ruko! Agar aap "${cleanTopic}" me best results chahte ho, to is video ko end tak zaroor dekho.`;
@@ -1108,7 +1115,7 @@ Return ONLY a valid JSON object matching this exact schema (no markdown formatti
         { type: "Bold Promise Hook", text: `Main aapko dikhaunga ek aisa 3-step formula jisse aap "${cleanTopic}" ko 60 seconds me seekh jaoge.` }
       ];
       fullScript = `Ruko! Agar aap "${cleanTopic}" me best results chahte ho, to is video ko end tak zaroor dekho. Zyada tar log isme fail hote hai kyunki wo galat approach use karte hai. Aaj se aapko bas ek chiz badalni hai: apni strategy aur consistency par focus karo. Ise 30 dino tak karo aur apna growth dekho. Agar video acchi lagi to follow zaroor karna!`;
-      caption = `Unpopular opinion: Zyada tar log "${cleanTopic}" ko galat tarike se kar rahe hai... 😳\n\nKaise laga aapko ye video? Comment karke zaroor bataye aur aisi videos ke liye follow karein! 👇\n\n#viral #${keyword1.toLowerCase().replace(/[^a-z0-9]/g, "")} #success #tips`;
+      caption = `Unpopular opinion: Zyada tar log "${cleanTopic}" galat kar rahe hai. 😳 Save karein aur try karein! 👇\n\n#viral #${keyword1.toLowerCase().replace(/[^a-z0-9]/g, "")} #tips`;
     }
 
     return {
@@ -1156,7 +1163,7 @@ Tasks:
    - Script 1: "Curiosity Loop" (Starts with a curiosity hook, raises a question, delivers value).
    - Script 2: "Controversial / Bold Claim" (Pattern interrupt hook, high-impact contrarian claim, delivers value).
    - Script 3: "Storytelling / Value-First" (Narrative hook, personal story style, delivers value).
-3. Generate a highly optimized Caption and 10-15 Hashtags (without '#' symbols).
+3. Generate an EXTREMELY SHORT, punchy, and concise Instagram Caption (at most 1-2 sentences plus a very brief Call to Action, keeping total word count under 30-40 words) and 10-15 Hashtags (without '#' symbols).
 
 CRITICAL LANGUAGE RULE:
 ${langInstruction}

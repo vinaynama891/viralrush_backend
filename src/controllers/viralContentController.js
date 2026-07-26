@@ -275,7 +275,7 @@ const getSearchById = async (req, res) => {
 const refineVideoContent = async (req, res) => {
   let tempDir = null;
   try {
-    const { videoId, title, description, platform, channelTitle, targetLanguage, step, selectedHook, selectedScript, videoDuration, videoUrl } = req.body;
+    let { videoId, title, description, platform, channelTitle, targetLanguage, step, selectedHook, selectedScript, videoDuration, videoUrl } = req.body;
 
     if (!title) {
       return res.status(400).json({
@@ -286,6 +286,11 @@ const refineVideoContent = async (req, res) => {
 
     const cleanPlatform = (platform || "youtube").toLowerCase().trim();
     let originalTranscript = "";
+
+    // Auto-resolve videoUrl for YouTube if not explicitly provided
+    if (!videoUrl && videoId && cleanPlatform === "youtube") {
+      videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    }
 
     // If step is scripts and we have videoUrl, download and transcribe!
     if (step === "scripts" && videoUrl) {

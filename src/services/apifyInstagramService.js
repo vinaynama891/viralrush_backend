@@ -1,5 +1,19 @@
 const axios = require("axios");
 
+const cleanInt = (val) => {
+  if (val === undefined || val === null) return 0;
+  if (typeof val === "number") return Math.round(val);
+  const cleanStr = String(val).replace(/,/g, "").trim();
+  
+  if (cleanStr.toUpperCase().endsWith("M")) {
+    return Math.round(parseFloat(cleanStr) * 1e6);
+  }
+  if (cleanStr.toUpperCase().endsWith("K")) {
+    return Math.round(parseFloat(cleanStr) * 1e3);
+  }
+  return parseInt(cleanStr, 10) || 0;
+};
+
 class ApifyInstagramService {
   /**
    * Look up a public Instagram profile and its top recent posts/reels using Apify Instagram Scraper.
@@ -43,18 +57,18 @@ class ApifyInstagramService {
     
     // Extract profile info
     const name = profile.fullName || profile.username || cleanUsername;
-    const followersCount = profile.followersCount || 0;
-    const postsCount = profile.postsCount || 0;
+    const followersCount = cleanInt(profile.followersCount);
+    const postsCount = cleanInt(profile.postsCount);
     const bio = profile.biography || "";
     const avatar = profile.profilePicUrlHD || profile.profilePicUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150";
 
     // Map top posts/reels from latestPosts
     const latestPosts = profile.latestPosts || [];
     const topVideos = latestPosts.map(item => {
-      const viewCount = parseInt(item.videoViewCount || item.videoPlayCount || 0, 10);
-      const likesCount = parseInt(item.likesCount || 0, 10);
-      const commentsCount = parseInt(item.commentsCount || 0, 10);
-      const isVideo = item.type === "Video" || item.type === "Sidecar" || !!item.videoUrl;
+      const viewCount = cleanInt(item.videoViewCount || item.videoPlayCount || item.playCount || item.viewCount);
+      const likesCount = cleanInt(item.likesCount || item.likeCount);
+      const commentsCount = cleanInt(item.commentsCount || item.commentCount);
+      const isVideo = item.type === "Video" || item.type === "Reel" || !!item.videoUrl;
 
       // Extract shortcode
       const shortcode = item.shortCode || item.code || "";
@@ -69,7 +83,8 @@ class ApifyInstagramService {
         likes: likesCount,
         comments: commentsCount,
         duration: isVideo ? "Reel" : "Post",
-        link: link
+        link: link,
+        videoUrl: item.videoUrl || ""
       };
     });
 
@@ -77,7 +92,7 @@ class ApifyInstagramService {
     topVideos.sort((a, b) => b.views - a.views);
 
     // Estimate total views
-    const totalViews = topVideos.reduce((sum, v) => sum + parseInt(v.views || 0, 10), 0);
+    const totalViews = topVideos.reduce((sum, v) => sum + cleanInt(v.views), 0);
 
     return {
       name,
@@ -88,6 +103,60 @@ class ApifyInstagramService {
       avatar,
       totalViews,
       topVideos
+    };
+  }
+
+  /**
+   * Look up details of a single public Instagram post/reel using Apify.
+   * @param {string} url - Direct Instagram Reel/post URL
+   * @returns {Promise<Object>} Map of reel details
+   */
+  static async lookupPost(url) {
+    const apifyToken = process.env.APIFY_TOKEN;
+    if (!apifyToken) {
+      throw new Error("APIFY_TOKEN is not configured in environment variables.");
+    }
+    
+    console.log(`[Apify Instagram] Starting lookup for post: ${url}`);
+    const apifyUrl = `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=${apifyToken}`;
+    
+    const requestBody = {
+      directUrls: [url],
+      resultsType: "details",
+      searchLimit: 1
+    };
+
+    const response = await axios.post(apifyUrl, requestBody, {
+      headers: {
+        "Content-Type": "application/json"
+      },
+      timeout: 90000
+    });
+
+    const items = response.data;
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new Error("No data found for this Instagram URL.");
+    }
+
+    const post = items[0];
+    const likesCount = cleanInt(post.likesCount || post.likeCount);
+    const commentsCount = cleanInt(post.commentsCount || post.commentCount);
+    const viewCount = cleanInt(post.videoViewCount || post.videoPlayCount || post.playCount || post.viewCount);
+    const caption = post.caption || "";
+    const videoUrl = post.videoUrl || "";
+    const displayUrl = post.displayUrl || "";
+    const duration = post.videoDuration || 30;
+    const ownerName = post.ownerFullName || post.ownerUsername || "";
+
+    return {
+      title: caption.split("\n")[0].substring(0, 100) || "Instagram Reel",
+      views: viewCount || likesCount * 8, // estimate if 0
+      likes: likesCount,
+      comments: commentsCount,
+      duration: Math.round(duration) || 30,
+      videoUrl,
+      thumbnail: displayUrl,
+      creator: ownerName
     };
   }
 }

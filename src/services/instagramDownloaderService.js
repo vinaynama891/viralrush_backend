@@ -4,6 +4,8 @@ const fs = require("fs");
 const https = require("https");
 const axios = require("axios");
 const ApiError = require("../utils/apiError");
+const ApifyInstagramService = require("./apifyInstagramService");
+
 
 const localWinBin = path.join(__dirname, "../../bin/yt-dlp.exe");
 const localUnixBin = path.join(__dirname, "../../bin/yt-dlp");
@@ -67,6 +69,9 @@ async function downloadViaRapidApi(url, tempDir, filename) {
 
   const duration = data.video_duration || 0;
   const title = data.caption?.text || "Instagram Reel";
+  const likes = data.like_count || data.likes_count || 0;
+  const comments = data.comment_count || data.comments_count || 0;
+  const views = data.play_count || data.view_count || likes * 8 || 0;
 
   const outputPath = path.join(tempDir, filename);
   console.log(`[InstagramDownloader] Downloading stream -> ${outputPath}`);
@@ -93,7 +98,10 @@ async function downloadViaRapidApi(url, tempDir, filename) {
   return {
     videoPath: outputPath,
     duration: Math.round(duration) || 30,
-    title
+    title,
+    views,
+    likes,
+    comments
   };
 }
 
@@ -173,6 +181,49 @@ async function downloadReel(url, tempDir, filename) {
     }
   }
 
+  // Try Apify for Instagram URLs to scrape metadata and direct video stream URL
+  if (url.includes("instagram.com") && process.env.APIFY_TOKEN) {
+    try {
+      console.log("[InstagramDownloader] Attempting Apify lookup for direct Reel video URL...");
+      const details = await ApifyInstagramService.lookupPost(url);
+      if (details.videoUrl) {
+        console.log("[InstagramDownloader] Scraped direct video URL successfully. Downloading stream...");
+        const outputPath = path.join(tempDir, filename);
+
+        await new Promise((resolve, reject) => {
+          const file = fs.createWriteStream(outputPath);
+          https.get(details.videoUrl, (res) => {
+            if (res.statusCode === 301 || res.statusCode === 302) {
+              https.get(res.headers.location, (res2) => {
+                res2.pipe(file);
+              });
+            } else {
+              res.pipe(file);
+            }
+            file.on("finish", () => {
+              file.close(() => resolve());
+            });
+          }).on("error", (err) => {
+            fs.unlink(outputPath, () => {});
+            reject(err);
+          });
+        });
+
+        return {
+          videoPath: outputPath,
+          duration: details.duration || 30,
+          title: details.title || "Instagram Reel",
+          views: details.views || 0,
+          likes: details.likes || 0,
+          comments: details.comments || 0,
+          creator: details.creator || ""
+        };
+      }
+    } catch (apifyErr) {
+      console.warn(`[InstagramDownloader] Apify lookup failed: ${apifyErr.message}. Falling back to yt-dlp...`);
+    }
+  }
+
   // 1. Fetch metadata first to validate duration and size
   const meta = await getReelMetadata(url);
 
@@ -237,7 +288,10 @@ async function downloadReel(url, tempDir, filename) {
       resolve({
         videoPath: outputPath,
         duration: Math.round(duration) || 0,
-        title: meta.title || meta.description || "Instagram Reel"
+        title: meta.title || meta.description || "Instagram Reel",
+        views: meta.view_count || meta.like_count * 8 || 0,
+        likes: meta.like_count || 0,
+        comments: meta.comment_count || 0
       });
     });
   });
@@ -247,6 +301,38 @@ async function downloadReel(url, tempDir, filename) {
  * Downloads audio stream only (extremely fast, suitable for transcription).
  */
 async function downloadAudioOnly(url, tempDir, filename) {
+  const isDirectUrl = url.includes("cdninstagram.com") || url.includes("fbcdn.net") || url.includes(".mp4") || url.includes(".m4a");
+
+  if (isDirectUrl) {
+    console.log(`[InstagramDownloader] Detected direct CDN URL. Downloading directly via HTTPS...`);
+    const outputPath = path.join(tempDir, filename);
+
+    await new Promise((resolve, reject) => {
+      const file = fs.createWriteStream(outputPath);
+      https.get(url, (res) => {
+        if (res.statusCode === 301 || res.statusCode === 302) {
+          https.get(res.headers.location, (res2) => {
+            res2.pipe(file);
+          });
+        } else {
+          res.pipe(file);
+        }
+        file.on("finish", () => {
+          file.close(() => resolve());
+        });
+      }).on("error", (err) => {
+        fs.unlink(outputPath, () => {});
+        reject(err);
+      });
+    });
+
+    return {
+      audioPath: outputPath,
+      duration: 30,
+      title: "Direct stream"
+    };
+  }
+
   const meta = await getReelMetadata(url);
   const duration = meta.duration || 0;
   
