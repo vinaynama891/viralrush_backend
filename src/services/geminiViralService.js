@@ -11,6 +11,20 @@ class GeminiViralService {
     return new GoogleGenAI({ apiKey });
   }
 
+  static getModels() {
+    const models = [];
+    if (process.env.GEMINI_MODEL) {
+      models.push(...process.env.GEMINI_MODEL.split(",").map((m) => m.trim()).filter(Boolean));
+    }
+    const defaults = ["gemini-3.5-flash-lite", "gemini-2.0-flash", "gemini-2.0-flash-lite"];
+    for (const d of defaults) {
+      if (!models.includes(d)) {
+        models.push(d);
+      }
+    }
+    return models;
+  }
+
   /**
    * Sends top YouTube video data to Gemini and receives structured viral analysis.
    *
@@ -65,11 +79,7 @@ Required JSON schema:
 
 Generate exactly 5 contentIdeas. Be specific, actionable, and base your analysis on the actual video data provided.`;
 
-    const models = [
-      "gemini-2.5-flash",
-      "gemini-2.0-flash",
-      "gemini-2.0-flash-lite",
-    ];
+    const models = this.getModels();
 
     let lastError = null;
 
@@ -188,11 +198,7 @@ Use realistic Unsplash image URLs for thumbnails (use real Unsplash photo IDs re
 Make viewCount, likeCount, commentCount realistic and internally consistent.
 Base all analysis on real ${platformName} trends and best practices.`;
 
-    const models = [
-      "gemini-2.5-flash",
-      "gemini-2.0-flash",
-      "gemini-2.0-flash-lite",
-    ];
+    const models = this.getModels();
 
     let lastError = null;
 
@@ -561,11 +567,7 @@ Return ONLY a valid JSON object matching this exact schema (no markdown formatti
 }
 `;
 
-    const models = [
-      "gemini-2.5-flash",
-      "gemini-2.0-flash",
-      "gemini-2.0-flash-lite",
-    ];
+    const models = this.getModels();
 
     let lastError = null;
 
@@ -657,7 +659,7 @@ Return ONLY a valid JSON object matching this exact schema (no markdown formatti
   ]
 }`;
 
-    const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"];
+    const models = this.getModels();
     let lastError = null;
 
     for (const modelName of models) {
@@ -771,21 +773,12 @@ Return ONLY a valid JSON object matching this exact schema (no markdown formatti
       const totalMinutes = totalSeconds / 60;
 
       if (totalSeconds > 0 && totalMinutes >= 3) {
-        // Long-form: calculate proportional word count
-        // Speaking rate ~140 words/min, but we scale by video length
-        const targetWords = Math.min(Math.round(totalMinutes * 140), 3000);
-        const minWords = Math.max(Math.round(targetWords * 0.7), 300);
-        durationInstruction = `The original video is a LONG-FORM video (duration: "${videoDuration}", approximately ${Math.round(totalMinutes)} minutes, ${totalSeconds} seconds).
-
-CRITICAL SCRIPT LENGTH REQUIREMENT - THIS IS THE MOST IMPORTANT RULE:
-- You MUST generate a DETAILED, COMPREHENSIVE script that matches the video's full duration.
-- Target word count: approximately ${minWords} to ${targetWords} words per script variation.
-- At a normal speaking pace of ~140 words per minute, a ${Math.round(totalMinutes)}-minute video needs approximately ${targetWords} words.
-- DO NOT generate a short 3-4 line summary. That is UNACCEPTABLE for a ${Math.round(totalMinutes)}-minute video.
-- Each script must include: Opening hook, multiple body sections with detailed talking points, examples, transitions between sections, and a strong closing CTA.
-- Structure it like a real YouTube script with clear sections: INTRO → POINT 1 (with examples) → POINT 2 (with examples) → POINT 3+ → RECAP → CTA/OUTRO.
-- For videos over 8 minutes, include at least 5-7 distinct content sections.
-- The script should feel like a complete word-for-word speaking guide that fills the entire ${Math.round(totalMinutes)} minutes.`;
+        // Long-form: Condense into a viral-ready, high-value summary script (200-400 words)
+        durationInstruction = `The original video is a LONG-FORM video (duration: "${videoDuration}", approximately ${Math.round(totalMinutes)} minutes).
+CRITICAL SCRIPT LENGTH REQUIREMENT:
+- Do NOT generate a word-for-word script matching the full long duration.
+- Instead, you MUST write a highly engaging, condensed, and value-packed refined script of approximately 200 to 400 words (suited for a 1.5 to 3 minute video).
+- Focus on extracting the most valuable takeaways, the main key point, and presenting them cleanly without fluff.`;
       } else if (totalSeconds > 0 && totalMinutes >= 1) {
         // Medium-form (1-3 min): full spoken script
         const targetWords = Math.round(totalMinutes * 140);
@@ -803,14 +796,22 @@ CRITICAL SCRIPT LENGTH REQUIREMENT - THIS IS THE MOST IMPORTANT RULE:
 
     let transcriptInstruction = "";
     if (originalTranscript) {
-      transcriptInstruction = `
+      const wordCount = originalTranscript.split(/\s+/).length;
+      if (wordCount > 400) {
+        transcriptInstruction = `
 CRITICAL SPEECH-TO-TEXT TRANSCRIPT REFERENCE:
 Here is the actual spoken transcription of the original video:
 "${originalTranscript}"
 
-You MUST write the 3 script variations by adapting, refining, and extending this original transcription. 
-Specifically, each script variation MUST be approximately 50 words longer than this original transcript to add extra clarity, depth, and engagement details.
-Use the transcription as the source of what was spoken, retain its core message, but make it better, and add approximately 50 additional words of valuable content to it.`;
+Since the original transcript is long (${wordCount} words), you MUST condense and refine it. Each script variation should be a highly structured, punchy 200-400 word script that retains the core valuable insights, best hooks, and actionable advice of the original transcript, but is much more engaging, concise, and structured.`;
+      } else {
+        transcriptInstruction = `
+CRITICAL SPEECH-TO-TEXT TRANSCRIPT REFERENCE:
+Here is the actual spoken transcription of the original video:
+"${originalTranscript}"
+
+You MUST write the 3 script variations by adapting, refining, and polishing this original transcription. Fix grammatical issues, improve flow, and add engagement hooks, keeping the script length around 150-300 words.`;
+      }
     }
 
     const prompt = `You are an expert social media growth strategist and copywriter.
@@ -852,7 +853,7 @@ Return ONLY a valid JSON object matching this exact schema (no markdown formatti
   ]
 }`;
 
-    const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"];
+    const models = this.getModels();
     let lastError = null;
 
     for (const modelName of models) {
@@ -991,7 +992,7 @@ Return ONLY a valid JSON object matching this exact schema (no markdown formatti
   "hashtags": ["list", "of", "10-15", "relevant", "hashtags", "without", "the", "hash", "symbol"]
 }`;
 
-    const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"];
+    const models = this.getModels();
     let lastError = null;
 
     for (const modelName of models) {
@@ -1196,7 +1197,7 @@ Return ONLY a valid JSON object matching this exact schema (no markdown, no extr
   "hashtags": ["tag1", "tag2", "tag3"]
 }`;
 
-    const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"];
+    const models = this.getModels();
     let lastError = null;
 
     for (const modelName of models) {

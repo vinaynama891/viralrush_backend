@@ -15,6 +15,20 @@ const { GoogleGenAI } = require("@google/genai");
 const { sendPlanReminderEmail } = require("../utils/mailer");
 const fs = require("fs");
 
+const getGeminiModels = () => {
+  const models = [];
+  if (process.env.GEMINI_MODEL) {
+    models.push(...process.env.GEMINI_MODEL.split(",").map((m) => m.trim()).filter(Boolean));
+  }
+  const defaults = ["gemini-3.5-flash-lite", "gemini-2.0-flash", "gemini-2.0-flash-lite"];
+  for (const d of defaults) {
+    if (!models.includes(d)) {
+      models.push(d);
+    }
+  }
+  return models;
+};
+
 
 const dashboardStats = async (req, res) => {
   res.json({
@@ -97,13 +111,7 @@ Return ONLY valid JSON (no markdown, no code fences):
     try {
       const genAI = new GoogleGenAI({apiKey: apiKey});
       
-      const modelNames = (process.env.GEMINI_MODEL || "gemini-2.5-flash")
-        .split(",")
-        .map((m) => m.trim())
-        .filter(Boolean);
-      if (!modelNames.includes("gemini-2.5-flash")) {
-        modelNames.push("gemini-2.5-flash");
-      }
+      const modelNames = getGeminiModels();
 
       for (const modelName of modelNames) {
         try {
@@ -234,11 +242,7 @@ Rules:
   // --- Try Gemini AI first ---
   try {
     const genAI = new GoogleGenAI({ apiKey });
-    const modelNames = (process.env.GEMINI_MODEL || "gemini-2.5-flash")
-      .split(",").map(m => m.trim()).filter(Boolean);
-    if (!modelNames.includes("gemini-2.5-flash")) {
-      modelNames.push("gemini-2.5-flash");
-    }
+    const modelNames = getGeminiModels();
 
     for (const modelName of modelNames) {
       try {
@@ -308,13 +312,7 @@ Return ONLY valid JSON (no markdown, no code fences) in this exact format:
 }`;
 
   const genAI = new GoogleGenAI({ apiKey });
-  const modelNames = (process.env.GEMINI_MODEL || "gemini-2.5-flash")
-    .split(",")
-    .map((m) => m.trim())
-    .filter(Boolean);
-  if (!modelNames.includes("gemini-2.5-flash")) {
-    modelNames.push("gemini-2.5-flash");
-  }
+  const modelNames = getGeminiModels();
 
   for (const modelName of modelNames) {
     try {
@@ -391,11 +389,7 @@ User's rough prompt: "${prompt.trim()}"`;
 
   // --- Try Gemini AI first ---
   const genAI = new GoogleGenAI({ apiKey });
-  const modelNames = (process.env.GEMINI_MODEL || "gemini-2.5-flash")
-    .split(",").map((m) => m.trim()).filter(Boolean);
-  if (!modelNames.includes("gemini-2.5-flash")) {
-    modelNames.push("gemini-2.5-flash");
-  }
+  const modelNames = getGeminiModels();
 
   for (const modelName of modelNames) {
     try {
@@ -462,11 +456,7 @@ Return ONLY valid JSON (no markdown, no code fences):
 
   // --- Try Gemini AI first ---
   const genAI = new GoogleGenAI({ apiKey });
-  const modelNames = (process.env.GEMINI_MODEL || "gemini-2.5-flash")
-    .split(",").map(m => m.trim()).filter(Boolean);
-  if (!modelNames.includes("gemini-2.5-flash")) {
-    modelNames.push("gemini-2.5-flash");
-  }
+  const modelNames = getGeminiModels();
 
   for (const modelName of modelNames) {
     try {
@@ -508,13 +498,7 @@ Return ONLY valid JSON (no markdown, no code fences):
   if (apiKey) {
     try {
       const genAI = new GoogleGenAI({ apiKey: apiKey });
-      const modelNames = (process.env.GEMINI_MODEL || "gemini-2.5-flash")
-        .split(",")
-        .map((m) => m.trim())
-        .filter(Boolean);
-      if (!modelNames.includes("gemini-2.5-flash")) {
-        modelNames.push("gemini-2.5-flash");
-      }
+      const modelNames = getGeminiModels();
 
       for (const modelName of modelNames) {
         try {
@@ -593,13 +577,7 @@ Return ONLY valid JSON (no markdown, no code fences):
 }`;
 
   const genAI = new GoogleGenAI({ apiKey });
-  const modelNames = (process.env.GEMINI_MODEL || "gemini-2.5-flash")
-    .split(",")
-    .map((m) => m.trim())
-    .filter(Boolean);
-  if (!modelNames.includes("gemini-2.5-flash")) {
-    modelNames.push("gemini-2.5-flash");
-  }
+  const modelNames = getGeminiModels();
 
   for (const modelName of modelNames) {
     try {

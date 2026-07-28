@@ -62,7 +62,16 @@ Return ONLY a valid JSON array of segments matching the original structure (no m
   }
 ]`;
 
-  const models = ["gemini-2.5-flash", "gemini-2.0-flash"];
+  const models = [];
+  if (process.env.GEMINI_MODEL) {
+    models.push(...process.env.GEMINI_MODEL.split(",").map(m => m.trim()).filter(Boolean));
+  }
+  const defaults = ["gemini-3.5-flash-lite", "gemini-2.0-flash"];
+  for (const d of defaults) {
+    if (!models.includes(d)) {
+      models.push(d);
+    }
+  }
   for (const modelName of models) {
     try {
       console.log(`[SubtitleService] Translating subtitles to ${targetLanguage} using model: ${modelName}`);

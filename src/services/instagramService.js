@@ -274,12 +274,15 @@ const generateAIReply = async (commentText, keyword, aiInstruction = "", replyTe
     try {
       const { GoogleGenAI } = require("@google/genai");
       const genAI = new GoogleGenAI({ apiKey: geminiKey });
-      const models = (process.env.GEMINI_MODEL || "gemini-2.5-flash")
-        .split(",")
-        .map(m => m.trim())
-        .filter(Boolean);
-      if (!models.includes("gemini-2.5-flash")) {
-        models.push("gemini-2.5-flash");
+      const models = [];
+      if (process.env.GEMINI_MODEL) {
+        models.push(...process.env.GEMINI_MODEL.split(",").map(m => m.trim()).filter(Boolean));
+      }
+      const defaults = ["gemini-3.5-flash-lite", "gemini-2.0-flash", "gemini-2.0-flash-lite"];
+      for (const d of defaults) {
+        if (!models.includes(d)) {
+          models.push(d);
+        }
       }
 
       const prompt = `You are a professional automated virtual assistant for an Instagram creator.

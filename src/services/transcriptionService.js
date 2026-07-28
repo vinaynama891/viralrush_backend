@@ -118,7 +118,16 @@ Expected JSON Schema:
 
   console.log(`[Transcription] Sending audio to Gemini API for transcription (language option: ${language})`);
 
-  const models = ["gemini-2.5-flash", "gemini-2.0-flash"];
+  const models = [];
+  if (process.env.GEMINI_MODEL) {
+    models.push(...process.env.GEMINI_MODEL.split(",").map(m => m.trim()).filter(Boolean));
+  }
+  const defaults = ["gemini-3.5-flash-lite", "gemini-2.0-flash"];
+  for (const d of defaults) {
+    if (!models.includes(d)) {
+      models.push(d);
+    }
+  }
   for (const modelName of models) {
     try {
       const response = await genAI.models.generateContent({
