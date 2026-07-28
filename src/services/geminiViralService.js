@@ -107,6 +107,15 @@ Generate exactly 5 contentIdeas. Be specific, actionable, and base your analysis
           throw new Error("Gemini returned incomplete JSON structure");
         }
 
+        // Normalize scriptOutline to String if it is an array
+        if (parsed.contentIdeas && Array.isArray(parsed.contentIdeas)) {
+          parsed.contentIdeas.forEach(idea => {
+            if (Array.isArray(idea.scriptOutline)) {
+              idea.scriptOutline = idea.scriptOutline.join(" • ");
+            }
+          });
+        }
+
         console.log(`[GeminiViralService] Success with model: ${modelName}`);
         return parsed;
       } catch (err) {
@@ -241,6 +250,15 @@ Base all analysis on real ${platformName} trends and best practices.`;
               videoUrl: `https://www.instagram.com/reel/${shortcode}/`,
               videoId: shortcode
             };
+          });
+        }
+
+        // Normalize scriptOutline to String if it is an array
+        if (parsed.contentIdeas && Array.isArray(parsed.contentIdeas)) {
+          parsed.contentIdeas.forEach(idea => {
+            if (Array.isArray(idea.scriptOutline)) {
+              idea.scriptOutline = idea.scriptOutline.join(" • ");
+            }
           });
         }
 

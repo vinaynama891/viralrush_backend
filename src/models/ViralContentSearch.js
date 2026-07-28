@@ -29,7 +29,7 @@ const ContentIdeaSchema = new mongoose.Schema(
     title:                  { type: String },
     hook:                   { type: String },
     format:                 { type: String },
-    scriptOutline:          { type: String },
+    scriptOutline:          { type: mongoose.Schema.Types.Mixed },
     estimatedViralPotential:{ type: String },
   },
   { _id: false }
