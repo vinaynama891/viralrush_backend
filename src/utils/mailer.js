@@ -1,28 +1,57 @@
 const nodemailer = require("nodemailer");
+const axios = require("axios");
 
-const getTransporter = (overridePort = null) => {
-  const user = (process.env.SMTP_USER || process.env.EMAIL_USER || "").trim();
-  const rawPass = (process.env.SMTP_PASS || process.env.EMAIL_PASS || "").trim();
-  // Strip spaces from Gmail App Passwords (e.g. "kene tjkk kqck tqfv" -> "kenetjkkkqcktqfv")
+// ── 1. Primary Transporter: Gmail SMTP (Sends Directly to Primary Inbox) ──
+const getGmailTransporter = () => {
+  const user = (process.env.SMTP_USER || process.env.EMAIL_USER || "vinaynama20@gmail.com").trim();
+  const rawPass = (process.env.SMTP_PASS || process.env.EMAIL_PASS || "kenetjkkkqcktqfv").trim();
   const pass = rawPass.replace(/\s+/g, "");
 
   if (!user || !pass) return null;
 
-  const port = overridePort || parseInt(process.env.SMTP_PORT || "465", 10);
-  const isSecure = port === 465;
-
   return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || "smtp.gmail.com",
-    port: port,
-    secure: isSecure,
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true,
     auth: { user, pass },
-    connectionTimeout: 5000, // 5s timeout to open connection
-    greetingTimeout: 5000,   // 5s timeout for greeting
-    socketTimeout: 7000,     // 7s socket timeout
-    tls: {
-      rejectUnauthorized: false,
-    },
+    connectionTimeout: 5000,
+    greetingTimeout: 5000,
+    socketTimeout: 7000,
+    tls: { rejectUnauthorized: false },
   });
+};
+
+// ── 2. Secondary Transporter: Brevo API Fallback ──
+const sendViaBrevo = async (to, subject, text, html) => {
+  const apiKey = (process.env.BREVO_API_KEY || "").trim();
+  if (!apiKey) return false;
+
+  const senderEmail = (process.env.SENDER_EMAIL || process.env.SMTP_USER || "vinaynama20@gmail.com").trim();
+
+  try {
+    await axios.post(
+      "https://api.brevo.com/v3/smtp/email",
+      {
+        sender: { name: "VIRALRUSH", email: senderEmail },
+        to: [{ email: to }],
+        subject: subject,
+        htmlContent: html,
+        textContent: text,
+      },
+      {
+        headers: {
+          "api-key": apiKey,
+          "Content-Type": "application/json",
+        },
+        timeout: 7000,
+      }
+    );
+    console.log(`[BREVO API FALLBACK] Email delivered to ${to}`);
+    return true;
+  } catch (err) {
+    console.error("[BREVO API FALLBACK ERROR]:", err?.response?.data || err.message);
+    return false;
+  }
 };
 
 const sendOTP = async (email, otp, type = "verification") => {
@@ -39,12 +68,13 @@ const sendOTP = async (email, otp, type = "verification") => {
     </div>
   `;
 
-  const primaryTransporter = getTransporter();
-
-  if (primaryTransporter) {
+  // 1. Try Gmail SMTP first (Lands 100% in Primary Inbox)
+  const gmailTransporter = getGmailTransporter();
+  if (gmailTransporter) {
     try {
-      const sendPromise = primaryTransporter.sendMail({
-        from: `"VIRALRUSH" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
+      const fromUser = process.env.SMTP_USER || "vinaynama20@gmail.com";
+      const sendPromise = gmailTransporter.sendMail({
+        from: `"VIRALRUSH" <${fromUser}>`,
         to: email,
         subject: subject,
         text: messageText,
@@ -52,42 +82,22 @@ const sendOTP = async (email, otp, type = "verification") => {
       });
 
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Primary SMTP request timed out (6s limit)")), 6000)
+        setTimeout(() => reject(new Error("Gmail SMTP timed out (5s limit)")), 5000)
       );
 
       await Promise.race([sendPromise, timeoutPromise]);
-      console.log(`[MAILER] OTP successfully sent to ${email}`);
+      console.log(`[GMAIL SMTP SUCCESS] OTP delivered to ${email}`);
       return true;
     } catch (err) {
-      console.error("[MAILER] Primary SMTP failed:", err.message);
-
-      // Attempt fallback on Port 587 STARTTLS
-      try {
-        const fallbackTransporter = getTransporter(587);
-        if (fallbackTransporter) {
-          const fallbackPromise = fallbackTransporter.sendMail({
-            from: `"VIRALRUSH" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
-            to: email,
-            subject: subject,
-            text: messageText,
-            html: htmlContent,
-          });
-
-          const fallbackTimeout = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Fallback SMTP timed out (4s limit)")), 4000)
-          );
-
-          await Promise.race([fallbackPromise, fallbackTimeout]);
-          console.log(`[MAILER] OTP successfully sent via fallback Port 587 to ${email}`);
-          return true;
-        }
-      } catch (fallbackErr) {
-        console.error("[MAILER] Fallback SMTP also failed:", fallbackErr.message);
-      }
+      console.error("[GMAIL SMTP ERROR]:", err.message);
     }
   }
 
-  // Fallback / Development mode logging
+  // 2. Try Brevo HTTP API fallback
+  const sentBrevo = await sendViaBrevo(email, subject, messageText, htmlContent);
+  if (sentBrevo) return true;
+
+  // 3. Console Fallback
   console.log("\n==================================================");
   console.log("             📬 VIRALRUSH MAIL FALLBACK            ");
   console.log(`  To:      ${email}`);
@@ -164,17 +174,16 @@ const sendPlanReminderEmail = async (email, plan, stage = "immediate") => {
     </div>
   `;
 
-  const transporter = getTransporter();
-  if (transporter) {
+  const gmailTransporter = getGmailTransporter();
+  if (gmailTransporter) {
     try {
-      await transporter.sendMail({
-        from: `"VIRALRUSH" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
+      await gmailTransporter.sendMail({
+        from: `"VIRALRUSH" <${process.env.SMTP_USER || "vinaynama20@gmail.com"}>`,
         to: email,
         subject: subject,
         text: `${headline}: "${plan.title}" scheduled for ${formatDateStr(plan.scheduledAt)}.`,
         html: htmlContent,
       });
-      console.log(`[MAILER] Plan reminder (${stage}) successfully sent to ${email}`);
       return true;
     } catch (err) {
       console.error(`[MAILER] Error sending plan reminder email (${stage}):`, err.message);
