@@ -1,19 +1,27 @@
-const nodemailer = require("nodemailer");
+const getTransporter = (overridePort = null) => {
+  const user = (process.env.SMTP_USER || process.env.EMAIL_USER || "").trim();
+  const rawPass = (process.env.SMTP_PASS || process.env.EMAIL_PASS || "").trim();
+  // Strip spaces from Gmail App Passwords (e.g. "kene tjkk kqck tqfv" -> "kenetjkkkqcktqfv")
+  const pass = rawPass.replace(/\s+/g, "");
 
-// Create transporter
-let transporter = null;
+  if (!user || !pass) return null;
 
-const isMailConfigured = process.env.SMTP_USER || process.env.EMAIL_USER;
+  const port = overridePort || parseInt(process.env.SMTP_PORT || "465", 10);
+  const isSecure = port === 465;
 
-if (isMailConfigured) {
-  transporter = nodemailer.createTransport({
-    service: process.env.SMTP_SERVICE || "gmail",
-    auth: {
-      user: process.env.SMTP_USER || process.env.EMAIL_USER,
-      pass: process.env.SMTP_PASS || process.env.EMAIL_PASS,
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST || "smtp.gmail.com",
+    port: port,
+    secure: isSecure,
+    auth: { user, pass },
+    connectionTimeout: 5000, // 5s timeout to open connection
+    greetingTimeout: 5000,   // 5s timeout for greeting
+    socketTimeout: 7000,     // 7s socket timeout
+    tls: {
+      rejectUnauthorized: false,
     },
   });
-}
+};
 
 const sendOTP = async (email, otp, type = "verification") => {
   const subject = type === "login" ? "VIRALRUSH - Login OTP Verification" : "VIRALRUSH - Account Verification OTP";
@@ -29,19 +37,51 @@ const sendOTP = async (email, otp, type = "verification") => {
     </div>
   `;
 
-  if (transporter) {
+  const primaryTransporter = getTransporter();
+
+  if (primaryTransporter) {
     try {
-      await transporter.sendMail({
+      const sendPromise = primaryTransporter.sendMail({
         from: `"VIRALRUSH" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
         to: email,
         subject: subject,
         text: messageText,
         html: htmlContent,
       });
+
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Primary SMTP request timed out (6s limit)")), 6000)
+      );
+
+      await Promise.race([sendPromise, timeoutPromise]);
       console.log(`[MAILER] OTP successfully sent to ${email}`);
       return true;
     } catch (err) {
-      console.error("[MAILER] Error sending email via SMTP:", err.message);
+      console.error("[MAILER] Primary SMTP failed:", err.message);
+
+      // Attempt fallback on Port 587 STARTTLS
+      try {
+        const fallbackTransporter = getTransporter(587);
+        if (fallbackTransporter) {
+          const fallbackPromise = fallbackTransporter.sendMail({
+            from: `"VIRALRUSH" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
+            to: email,
+            subject: subject,
+            text: messageText,
+            html: htmlContent,
+          });
+
+          const fallbackTimeout = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Fallback SMTP timed out (4s limit)")), 4000)
+          );
+
+          await Promise.race([fallbackPromise, fallbackTimeout]);
+          console.log(`[MAILER] OTP successfully sent via fallback Port 587 to ${email}`);
+          return true;
+        }
+      } catch (fallbackErr) {
+        console.error("[MAILER] Fallback SMTP also failed:", fallbackErr.message);
+      }
     }
   }
 
@@ -122,6 +162,7 @@ const sendPlanReminderEmail = async (email, plan, stage = "immediate") => {
     </div>
   `;
 
+  const transporter = getTransporter();
   if (transporter) {
     try {
       await transporter.sendMail({
