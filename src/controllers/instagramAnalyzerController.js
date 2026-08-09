@@ -20,12 +20,23 @@ const analyzeReel = async (req, res) => {
     const { reelUrl, language } = req.body;
 
     // --- 1. Validate URL ---
-    const cleanUrl = validateInstagramUrl(reelUrl);
+    let cleanUrl = validateInstagramUrl(reelUrl);
+    const isYouTube = reelUrl && (reelUrl.includes("youtube.com") || reelUrl.includes("youtu.be"));
+    
+    if (isYouTube) {
+      try {
+        const parsed = new URL(reelUrl.trim());
+        if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+          cleanUrl = parsed.toString();
+        }
+      } catch (e) {}
+    }
+
     if (!cleanUrl) {
       return res.status(400).json({
         success: false,
-        message: "Invalid or unsupported Instagram Reel URL.",
-        code: "INVALID_INSTAGRAM_URL"
+        message: "Invalid or unsupported URL. Please paste a YouTube video link or an Instagram Reel link.",
+        code: "INVALID_URL"
       });
     }
 
@@ -64,20 +75,42 @@ const analyzeReel = async (req, res) => {
       });
     }
 
-    const { videoPath, duration, title } = downloadRes;
+    let { videoPath, duration, title } = downloadRes;
 
     // --- 5. Extract Audio ---
     let audioPath;
     try {
       audioPath = await extractAudio(videoPath, tempDir, "audio.mp3");
     } catch (err) {
-      const code = err.code || "AUDIO_EXTRACTION_FAILED";
-      const status = err.statusCode || 500;
-      return res.status(status).json({
-        success: false,
-        message: err.message || "Failed to extract audio from video.",
-        code
-      });
+      if (err.code === "NO_AUDIO_FOUND" || err.message.includes("No audio found") || err.message.includes("Output file does not contain any stream")) {
+        console.warn("[InstagramController] Scraped direct video has no audio. Retrying download via yt-dlp directly...");
+        try {
+          if (fs.existsSync(videoPath)) {
+            fs.unlinkSync(videoPath);
+          }
+          downloadRes = await downloadReel(cleanUrl, tempDir, "reel.mp4", true);
+          videoPath = downloadRes.videoPath;
+          duration = downloadRes.duration;
+          title = downloadRes.title;
+          audioPath = await extractAudio(videoPath, tempDir, "audio.mp3");
+        } catch (retryErr) {
+          const code = retryErr.code || "AUDIO_EXTRACTION_FAILED";
+          const status = retryErr.statusCode || 500;
+          return res.status(status).json({
+            success: false,
+            message: retryErr.message || "Failed to extract audio from video.",
+            code
+          });
+        }
+      } else {
+        const code = err.code || "AUDIO_EXTRACTION_FAILED";
+        const status = err.statusCode || 500;
+        return res.status(status).json({
+          success: false,
+          message: err.message || "Failed to extract audio from video.",
+          code
+        });
+      }
     }
 
     // --- 6. Transcribe Audio ---

@@ -169,9 +169,11 @@ async function getReelMetadata(url) {
 /**
  * Downloads public Reel video.
  */
-async function downloadReel(url, tempDir, filename) {
+async function downloadReel(url, tempDir, filename, forceYtDlp = false) {
+  const isYouTube = url.includes("youtube.com") || url.includes("youtu.be");
+
   // Try RapidAPI first if key is configured
-  if (process.env.RAPIDAPI_KEY) {
+  if (!forceYtDlp && !isYouTube && process.env.RAPIDAPI_KEY) {
     try {
       console.log("[InstagramDownloader] Attempting download via RapidAPI...");
       const result = await downloadViaRapidApi(url, tempDir, filename);
@@ -182,7 +184,7 @@ async function downloadReel(url, tempDir, filename) {
   }
 
   // Try Apify for Instagram URLs to scrape metadata and direct video stream URL
-  if (url.includes("instagram.com") && process.env.APIFY_TOKEN) {
+  if (!forceYtDlp && !isYouTube && url.includes("instagram.com") && process.env.APIFY_TOKEN) {
     try {
       console.log("[InstagramDownloader] Attempting Apify lookup for direct Reel video URL...");
       const details = await ApifyInstagramService.lookupPost(url);
@@ -234,12 +236,15 @@ async function downloadReel(url, tempDir, filename) {
 
   console.log(`[InstagramDownloader] Video Duration: ${duration}s, Estimated Size: ${sizeMb.toFixed(2)}MB`);
 
-  if (duration > MAX_DURATION) {
-    throw new ApiError(`Reel duration (${duration}s) exceeds maximum allowed limit of ${MAX_DURATION}s.`, 400, "VIDEO_TOO_LONG");
+  const limitDuration = isYouTube ? 1200 : MAX_DURATION;
+  const limitSize = isYouTube ? 300 : MAX_SIZE_MB;
+
+  if (duration > limitDuration) {
+    throw new ApiError(`Video duration (${duration}s) exceeds maximum allowed limit of ${limitDuration}s.`, 400, "VIDEO_TOO_LONG");
   }
 
-  if (sizeMb > MAX_SIZE_MB) {
-    throw new ApiError(`Reel file size (${sizeMb.toFixed(2)}MB) exceeds maximum allowed limit of ${MAX_SIZE_MB}MB.`, 400, "FILE_TOO_LARGE");
+  if (sizeMb > limitSize) {
+    throw new ApiError(`Video file size (${sizeMb.toFixed(2)}MB) exceeds maximum allowed limit of ${limitSize}MB.`, 400, "FILE_TOO_LARGE");
   }
 
   const outputPath = path.join(tempDir, filename);
@@ -253,7 +258,7 @@ async function downloadReel(url, tempDir, filename) {
       "--max-filesize",
       `${MAX_SIZE_MB}M`,
       "-f",
-      "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+      isYouTube ? "bestaudio" : "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
       "-o",
       outputPath
     ];

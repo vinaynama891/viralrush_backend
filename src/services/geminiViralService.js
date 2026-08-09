@@ -24,7 +24,52 @@ class GeminiViralService {
     }
     return models;
   }
+  static getDurationInstruction(videoDuration) {
+    if (!videoDuration || videoDuration === "auto" || videoDuration === "N/A" || videoDuration === "undefined") {
+      return {
+        words: 500,
+        text: `The target script length should be around 500-750 words (for a standard 60-90 seconds video length).`
+      };
+    }
 
+    let totalSeconds = 0;
+    const durationStr = String(videoDuration).trim();
+    const hmsMatch = durationStr.match(/(?:(\d+)h)?\s*(?:(\d+)m)?\s*(?:(\d+)s)?/i);
+    const colonParts = durationStr.split(":");
+
+    if (colonParts.length === 3) {
+      totalSeconds = parseInt(colonParts[0], 10) * 3600 + parseInt(colonParts[1], 10) * 60 + parseInt(colonParts[2], 10);
+    } else if (colonParts.length === 2 && !durationStr.match(/[hms]/i)) {
+      totalSeconds = parseInt(colonParts[0], 10) * 60 + parseInt(colonParts[1], 10);
+    } else if (hmsMatch && (hmsMatch[1] || hmsMatch[2] || hmsMatch[3])) {
+      const h = parseInt(hmsMatch[1] || "0", 10);
+      const m = parseInt(hmsMatch[2] || "0", 10);
+      const s = parseInt(hmsMatch[3] || "0", 10);
+      totalSeconds = h * 3600 + m * 60 + s;
+    } else {
+      totalSeconds = parseInt(durationStr, 10) || 0;
+    }
+
+    if (totalSeconds <= 0) {
+      return {
+        words: 500,
+        text: `The target script length should be around 500-750 words (for a standard 60-90 seconds video length).`
+      };
+    }
+
+    const totalMinutes = totalSeconds / 60;
+    // User requested: 500 words per minute of duration, capped at 1200 words max to prevent model lazy placeholders
+    const targetWords = Math.min(Math.max(Math.round(totalMinutes * 500), 100), 1200);
+
+    return {
+      words: targetWords,
+      text: `The video duration is "${videoDuration}" (${totalSeconds} seconds, approximately ${totalMinutes.toFixed(2)} minutes).
+CRITICAL SCRIPT LENGTH REQUIREMENT:
+- You MUST write the spoken script(s) ("fullScript" or "originalScript") of approximately ${targetWords} words.
+- This is based strictly on a target speed of 500 words per minute (500 WPM) of the video's duration (capped at 1200 words maximum).
+- Make sure the script matches this target length closely so it fits the duration perfectly when spoken.`
+    };
+  }
   /**
    * Sends top YouTube video data to Gemini and receives structured viral analysis.
    *
@@ -534,6 +579,20 @@ Base all analysis on real ${platformName} trends and best practices.`;
       ? "Create an EXTREMELY SHORT, punchy, and concise Instagram Caption/Description. It must be at most 1-2 short sentences plus a very brief Call to Action (CTA), keeping the total word count under 30-40 words. Do not make it long or detailed."
       : "Create a viral-ready Caption/Description that is optimized for engagement and click-through rate.";
 
+    const durationRes = this.getDurationInstruction(videoDuration);
+    let targetWords = durationRes.words;
+    let durationText = durationRes.text;
+
+    if (originalTranscript) {
+      const wordCount = originalTranscript.split(/\s+/).filter(Boolean).length;
+      targetWords = Math.min(wordCount + 50, 1200);
+      durationText = `The original video transcript contains ${wordCount} words.
+CRITICAL SCRIPT LENGTH REQUIREMENT:
+- You MUST write the spoken script(s) ("fullScript" or "originalScript") of approximately ${targetWords} words.
+- This is target length is based on original transcript length + 50 words (capped at 1200 words max to prevent model lazy placeholders).
+- You MUST write the actual, complete spoken script word-for-word. DO NOT use lazy bracketed placeholders like '[Insert detailed script here]'. Write every spoken word.`;
+    }
+
     const prompt = `You are an expert social media growth strategist and copywriter.
 I want to analyze and refine a video/post from ${platformName}.
 
@@ -542,12 +601,15 @@ Here is the details of the post:
 - Description/Caption: "${description || "No description provided."}"
 - Creator/Channel: "${channelTitle}"
 
+CRITICAL DURATION REQUIREMENT:
+${durationText}
+
 CRITICAL LANGUAGE REQUIREMENT:
 ${langInstruction}
 YOU MUST STRICTLY FOLLOW THIS LANGUAGE RULE. EVEN IF THE JSON SCHEMA PLACEHOLDERS BELOW ARE SHOWN IN ENGLISH, THE ACTUAL GENERATED CONTENT VALUES OF "originalScript", "title", "script.hook", "script.hooks", "script.structure", "script.fullScript", AND "caption" MUST BE WRITTEN IN THE LANGUAGE STIPULATED ABOVE. THIS IS MANDATORY.
 
 Please analyze this content and provide improvements to make it go viral. Specifically:
-1. Reconstruct or estimate a realistic word-for-word transcript/script that was used in the original video (30-60 seconds read time) based on the title, description/caption, and context.
+1. Reconstruct or estimate a realistic word-for-word transcript/script that was used in the original video matching the target length (${targetWords} words) based on the title, description/caption, and context.
 2. Suggest an improved catchy Title.
 3. Draft a complete, high-converting refined video Script. Generate 3 distinct scroll-stopping hook variations (e.g. Curiosity, Bold/Controversial, and Storytelling/Value-First) in the target language. Also provide a structure and a complete spoken script.
 4. ${captionRefineInstruction}
@@ -555,7 +617,7 @@ Please analyze this content and provide improvements to make it go viral. Specif
 
 Return ONLY a valid JSON object matching this exact schema (no markdown formatting, no explanation, no code fences):
 {
-  "originalScript": "Reconstructed/estimated word-for-word transcript or script used in the original video (30-60 seconds read time)",
+  "originalScript": "Reconstructed/estimated word-for-word transcript or script used in the original video (approximately ${targetWords} words)",
   "title": "Improved Catchy Title Idea",
   "script": {
     "hook": "Opening 1-2 sentence hook designed to grab attention immediately (Primary/Best choice)",
@@ -578,7 +640,7 @@ Return ONLY a valid JSON object matching this exact schema (no markdown formatti
       "2. Core value delivery...",
       "3. Call to Action..."
     ],
-    "fullScript": "A complete, spoken refined script for the video (word-for-word, 30-60 seconds read time)"
+    "fullScript": "A complete, spoken refined script for the video (approximately ${targetWords} words)"
   },
   "caption": "Catchy caption with emojis, engaging questions, and Call to Action, ready to copy and paste",
   "hashtags": ["list", "of", "10-15", "relevant", "hashtags", "without", "the", "hash", "symbol"]
@@ -761,79 +823,29 @@ Return ONLY a valid JSON object matching this exact schema (no markdown formatti
       langInstruction = `AUTO-DETECT LANGUAGE RULE: Detect the language of the selected hook. If it is Hindi or Hinglish, write the script variations in that exact language/mix.`;
     }
 
-    let durationInstruction = "";
-    if (videoDuration && videoDuration !== "auto" && videoDuration !== "N/A") {
-      // Parse duration to total seconds - support ALL formats:
-      // "10m 30s", "1h 5m 30s", "10:30", "1:05:30", "630", "PT10M30S"
-      let totalSeconds = 0;
-
-      // Format: "XhYmZs" or "Xm Ys" (from YouTubeService._parseDuration)
-      const hmsMatch = videoDuration.match(/(?:(\d+)h)?\s*(?:(\d+)m)?\s*(?:(\d+)s)?/i);
-      const colonParts = videoDuration.split(":");
-
-      if (colonParts.length === 3) {
-        // "H:MM:SS" format
-        totalSeconds = parseInt(colonParts[0], 10) * 3600 + parseInt(colonParts[1], 10) * 60 + parseInt(colonParts[2], 10);
-      } else if (colonParts.length === 2 && !videoDuration.match(/[hms]/i)) {
-        // "M:SS" format (only if no h/m/s letters present)
-        totalSeconds = parseInt(colonParts[0], 10) * 60 + parseInt(colonParts[1], 10);
-      } else if (hmsMatch && (hmsMatch[1] || hmsMatch[2] || hmsMatch[3])) {
-        // "10m 30s", "1h 5m", "45s" etc.
-        const h = parseInt(hmsMatch[1] || "0", 10);
-        const m = parseInt(hmsMatch[2] || "0", 10);
-        const s = parseInt(hmsMatch[3] || "0", 10);
-        totalSeconds = h * 3600 + m * 60 + s;
-      } else {
-        // Pure numeric seconds
-        totalSeconds = parseInt(videoDuration, 10) || 0;
-      }
-
-      const totalMinutes = totalSeconds / 60;
-
-      if (totalSeconds > 0 && totalMinutes >= 3) {
-        // Long-form: Condense into a viral-ready, high-value summary script (200-400 words)
-        durationInstruction = `The original video is a LONG-FORM video (duration: "${videoDuration}", approximately ${Math.round(totalMinutes)} minutes).
-CRITICAL SCRIPT LENGTH REQUIREMENT:
-- Do NOT generate a word-for-word script matching the full long duration.
-- Instead, you MUST write a highly engaging, condensed, and value-packed refined script of approximately 200 to 400 words (suited for a 1.5 to 3 minute video).
-- Focus on extracting the most valuable takeaways, the main key point, and presenting them cleanly without fluff.`;
-      } else if (totalSeconds > 0 && totalMinutes >= 1) {
-        // Medium-form (1-3 min): full spoken script
-        const targetWords = Math.round(totalMinutes * 140);
-        durationInstruction = `The original video is a medium-length video (duration: "${videoDuration}", approximately ${Math.round(totalMinutes * 10) / 10} minutes). You MUST write a complete word-for-word spoken script of approximately ${targetWords} words that fills the entire video duration at a normal speaking pace (~140 words/minute).`;
-      } else if (totalSeconds > 0) {
-        // Short-form (under 1 min)
-        const targetWords = Math.max(Math.round((totalSeconds / 60) * 150), 40);
-        durationInstruction = `The original video is a short-form video (duration: "${videoDuration}", approximately ${totalSeconds} seconds). You MUST write the spoken script(s) of approximately ${targetWords} words, matching this length when read aloud at a normal conversational pace.`;
-      } else {
-        durationInstruction = `The target script length should be around 60-90 seconds read time (approximately 130-200 words) for a social media video.`;
-      }
-    } else {
-      durationInstruction = `The target script length should be around 60-90 seconds read time (approximately 130-200 words) for a social media video.`;
-    }
+    const durationRes = this.getDurationInstruction(videoDuration);
+    let targetWords = durationRes.words;
+    let durationInstruction = durationRes.text;
 
     let transcriptInstruction = "";
     if (originalTranscript) {
-      const wordCount = originalTranscript.split(/\s+/).length;
-      if (wordCount > 400) {
-        transcriptInstruction = `
+      const wordCount = originalTranscript.split(/\s+/).filter(Boolean).length;
+      targetWords = Math.min(wordCount + 50, 1200);
+      durationInstruction = `Based on the original transcript word count, the target length for each script is approximately ${targetWords} words.`;
+      transcriptInstruction = `
 CRITICAL SPEECH-TO-TEXT TRANSCRIPT REFERENCE:
 Here is the actual spoken transcription of the original video:
 "${originalTranscript}"
 
-Since the original transcript is long (${wordCount} words), you MUST condense and refine it. Each script variation should be a highly structured, punchy 200-400 word script that retains the core valuable insights, best hooks, and actionable advice of the original transcript, but is much more engaging, concise, and structured.`;
-      } else {
-        transcriptInstruction = `
-CRITICAL SPEECH-TO-TEXT TRANSCRIPT REFERENCE:
-Here is the actual spoken transcription of the original video:
-"${originalTranscript}"
-
-You MUST write the 3 script variations by adapting, refining, and polishing this original transcription. Fix grammatical issues, improve flow, and add engagement hooks, keeping the script length around 150-300 words.`;
-      }
+You MUST write the 3 script variations by adapting, refining, and polishing this original transcription. Fix grammatical issues, improve flow, and add engagement hooks.
+CRITICAL WORD COUNT REQUIREMENT:
+- The original transcript contains ${wordCount} words.
+- You MUST write the 3 script variations to be approximately ${targetWords} words each (original transcript's length + 50 words, capped at 1200 words maximum to prevent model lazy placeholders).
+- You MUST write the actual, complete spoken script word-for-word. DO NOT use lazy bracketed placeholders like '[Insert detailed script here...]'. Write every single word that should be spoken.`;
     }
 
     const prompt = `You are an expert social media growth strategist and copywriter.
-I want to write 3 distinct video script variations based on a specific hook for a video/post on ${platformName}.
+I want to write a single viral video script based on a specific hook for a video/post on ${platformName}.
 
 Here is the details of the post:
 - Title: "${title}"
@@ -848,25 +860,21 @@ ${durationInstruction}
 CRITICAL LANGUAGE REQUIREMENT:
 ${langInstruction}
 
-Please generate exactly 3 distinct video script variations that build upon this hook and match the duration instruction. Each script must START with the Selected Hook: "${selectedHook}". The variations should have different storytelling styles or angles:
-1. Action-oriented & Direct Style (gets straight to the solution with quick points)
-2. Educational & Explanation Style (deep dives into the 'why' and 'how')
-3. High-Energy / Storyteller Style (uses suspenseful, high-energy delivery or a quick narrative flow)
+Please generate exactly ONE complete, high-converting video script that builds upon this hook.
+The script MUST START with the Selected Hook: "${selectedHook}".
+Use an engaging mix of action-oriented storytelling with emotional hooks and direct value delivery.
+
+CRITICAL RULES:
+- Write the actual, complete spoken script word-for-word.
+- DO NOT use any lazy bracketed placeholders like '[Insert script here...]'. Write every single spoken word.
+- The script must be approximately ${targetWords} words long.
 
 Return ONLY a valid JSON object matching this exact schema (no markdown formatting, no explanation, no code fences):
 {
   "scripts": [
     {
-      "type": "Action-oriented Style",
-      "text": "The full word-for-word spoken script text starting with the hook"
-    },
-    {
-      "type": "Educational Style",
-      "text": "The full word-for-word spoken script text starting with the hook"
-    },
-    {
-      "type": "High-Energy Style",
-      "text": "The full word-for-word spoken script text starting with the hook"
+      "type": "Viral Script",
+      "text": "The complete, full word-for-word spoken script starting with the hook (approximately ${targetWords} words)"
     }
   ]
 }`;
@@ -889,7 +897,7 @@ Return ONLY a valid JSON object matching this exact schema (no markdown formatti
         const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
         const parsed = JSON.parse(cleaned);
 
-        if (!Array.isArray(parsed.scripts) || parsed.scripts.length !== 3) {
+        if (!Array.isArray(parsed.scripts) || parsed.scripts.length < 1) {
           throw new Error("Gemini returned incomplete scripts structure");
         }
 

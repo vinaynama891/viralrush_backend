@@ -3,7 +3,7 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const { sendOTP } = require("../utils/mailer");
 
-const ADMIN_EMAIL = "dkbharke99@gmail.com";
+const ADMIN_EMAIL = "sainitanishk38@gmail.com";
 const ADMIN_PASSWORD = "Viral@20";
 
 const signToken = (id, email) =>
@@ -36,67 +36,64 @@ const signup = async (req, res, next) => {
       }
     }
 
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanUsername = username.trim();
+
     // Check if verified user exists with this email or username
-    const emailExists = await User.findOne({ email });
+    const emailExists = await User.findOne({ email: cleanEmail });
     if (emailExists && emailExists.isVerified !== false) {
       return res.status(400).json({ message: "Email already exists." });
     }
 
-    const usernameExists = await User.findOne({ username });
+    const usernameExists = await User.findOne({ username: { $regex: new RegExp(`^${cleanUsername.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, "i") } });
     if (usernameExists && usernameExists.isVerified !== false) {
       return res.status(400).json({ message: "Username already exists." });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const otp = generateOTP();
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
     let user;
     if (emailExists) {
       // Overwrite unverified user registration details
       user = emailExists;
-      user.username = username.trim();
-      user.name = name || username.trim();
+      user.username = cleanUsername;
+      user.name = name || cleanUsername;
       user.password = hashedPassword;
       user.niche = niche || "Brand";
       user.platform = platform || "None";
       user.platformProfileUrl = platformProfileUrl || "";
       user.followers = followers || 0;
-      user.role = email === ADMIN_EMAIL ? "admin" : (role === "brand" ? "brand" : "creator");
-      user.isVerified = true;
-      user.otp = "";
-      user.otpExpiry = null;
+      user.role = cleanEmail === ADMIN_EMAIL.toLowerCase() ? "admin" : (role === "brand" ? "brand" : "creator");
+      user.isVerified = false;
+      user.otp = otp;
+      user.otpExpiry = otpExpiry;
     } else {
       user = new User({
-        username: username.trim(),
-        name: name || username.trim(),
-        email,
+        username: cleanUsername,
+        name: name || cleanUsername,
+        email: cleanEmail,
         password: hashedPassword,
-        niche,
-        platform,
-        platformProfileUrl,
+        niche: niche || "Creator",
+        platform: platform || "Instagram",
+        platformProfileUrl: platformProfileUrl || "",
         followers: followers || 0,
-        role: email === ADMIN_EMAIL ? "admin" : (role === "brand" ? "brand" : "creator"),
-        isVerified: true,
-        otp: "",
-        otpExpiry: null,
+        role: cleanEmail === ADMIN_EMAIL.toLowerCase() ? "admin" : (role === "brand" ? "brand" : "creator"),
+        isVerified: false,
+        otp,
+        otpExpiry,
       });
     }
 
     await user.save();
+    await sendOTP(cleanEmail, otp, "signup");
 
     return res.status(200).json({
-      message: "Registration successful!",
-      token: signToken(user._id, user.email),
-      user: {
-        id: user._id,
-        username: user.username,
-        name: user.name,
-        email: user.email,
-        niche: user.niche,
-        platform: user.platform,
-        platformProfileUrl: user.platformProfileUrl,
-        followers: user.followers,
-        role: user.role,
-      },
+      message: "Registration initiated! OTP has been sent to your email.",
+      otpRequired: true,
+      requiresOTP: true,
+      email: cleanEmail,
     });
   } catch (error) {
     next(error);
@@ -110,20 +107,12 @@ const verifySignupOTP = async (req, res, next) => {
       return res.status(400).json({ message: "Email and OTP are required." });
     }
 
-    const user = await User.findOne({ email });
+    const cleanEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: cleanEmail });
     if (!user) return res.status(404).json({ message: "User not found." });
 
-    if (user.isVerified) {
-      return res.status(400).json({ message: "User already verified." });
-    }
-
-    // Bypass/testing otp of 123456
-    const isBypass = (email === ADMIN_EMAIL && otp === "123456");
-
-    if (!isBypass) {
-      if (user.otp !== otp || new Date() > user.otpExpiry) {
-        return res.status(400).json({ message: "Invalid or expired OTP." });
-      }
+    if (!user.otp || user.otp !== otp || new Date() > user.otpExpiry) {
+      return res.status(400).json({ message: "Invalid or expired OTP." });
     }
 
     user.isVerified = true;
@@ -158,9 +147,20 @@ const login = async (req, res, next) => {
       return res.status(400).json({ message: "Email and password are required." });
     }
 
+    const trimmedInput = (email || "").trim();
+    const lowerInput = trimmedInput.toLowerCase();
+
     // ── Admin shortcut ──
-    if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-      let adminUser = await User.findOne({ email: ADMIN_EMAIL });
+    if (
+      (lowerInput === ADMIN_EMAIL.toLowerCase() || lowerInput === "admin") &&
+      password === ADMIN_PASSWORD
+    ) {
+      let adminUser = await User.findOne({
+        $or: [
+          { email: ADMIN_EMAIL },
+          { username: "admin" }
+        ]
+      });
       if (!adminUser) {
         const hashedPassword = await bcrypt.hash(ADMIN_PASSWORD, 10);
         adminUser = await User.create({
@@ -177,6 +177,10 @@ const login = async (req, res, next) => {
         });
       } else {
         let updated = false;
+        if (adminUser.email !== ADMIN_EMAIL) {
+          adminUser.email = ADMIN_EMAIL;
+          updated = true;
+        }
         if (adminUser.role !== "admin") {
           adminUser.role = "admin";
           updated = true;
@@ -206,32 +210,34 @@ const login = async (req, res, next) => {
       });
     }
 
-    // ── Normal user login ──
-    const user = await User.findOne({ email });
-    if (!user) return res.status(401).json({ message: "Invalid credentials" });
+    // ── Normal user login (Match email OR username case-insensitively) ──
+    const escapedInput = trimmedInput.toLowerCase().replace(/[-[\]{}()*+?.,\\^$|#]/g, '\\$&');
+    const user = await User.findOne({
+      $or: [
+        { email: lowerInput },
+        { email: { $regex: new RegExp(`^${escapedInput}$`, "i") } },
+        { username: { $regex: new RegExp(`^${escapedInput}$`, "i") } }
+      ]
+    });
+
+    if (!user) return res.status(401).json({ message: "Invalid credentials. Account not found." });
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(401).json({ message: "Invalid credentials" });
+    if (!isMatch) return res.status(401).json({ message: "Invalid credentials. Incorrect password." });
 
-    // Ensure user is verified now that OTP is removed
-    if (!user.isVerified) {
-      user.isVerified = true;
-      await user.save();
-    }
+    // Generate login OTP
+    const otp = generateOTP();
+    user.otp = otp;
+    user.otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    await user.save();
 
-    return res.json({
-      token: signToken(user._id, user.email),
-      user: {
-        id: user._id,
-        username: user.username,
-        name: user.name,
-        email: user.email,
-        niche: user.niche,
-        platform: user.platform,
-        platformProfileUrl: user.platformProfileUrl,
-        followers: user.followers,
-        role: user.role || "user",
-      },
+    await sendOTP(user.email, otp, "login");
+
+    return res.status(200).json({
+      message: "Login OTP sent to your email.",
+      otpRequired: true,
+      requiresOTP: true,
+      email: user.email,
     });
   } catch (error) {
     next(error);
@@ -245,17 +251,15 @@ const verifyLoginOTP = async (req, res, next) => {
       return res.status(400).json({ message: "Email and OTP are required." });
     }
 
-    const user = await User.findOne({ email });
+    const cleanEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: cleanEmail });
     if (!user) return res.status(404).json({ message: "User not found." });
 
-    const isBypass = (email === ADMIN_EMAIL && otp === "123456");
-
-    if (!isBypass) {
-      if (user.otp !== otp || new Date() > user.otpExpiry) {
-        return res.status(400).json({ message: "Invalid or expired OTP." });
-      }
+    if (!user.otp || user.otp !== otp || new Date() > user.otpExpiry) {
+      return res.status(400).json({ message: "Invalid or expired OTP." });
     }
 
+    user.isVerified = true;
     user.otp = "";
     user.otpExpiry = null;
     await user.save();

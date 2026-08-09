@@ -22,6 +22,9 @@ const {
   getPostComments,
   proxyInstagramImage,
   connectInstagram,
+  connectByHandle,
+  findAccountsByIdentifier,
+  connectByCredentials,
   getSafeSignals,
   lookupCompetitor
 } = require("../controllers/instagramController");
@@ -85,6 +88,9 @@ router.post("/disconnect", protect, disconnectInstagram);
 
 // Safe trend signals and official OAuth connect
 router.post("/connect", protect, connectInstagram);
+router.post("/connect-handle", protect, connectByHandle);
+router.post("/find-accounts", protect, findAccountsByIdentifier);
+router.post("/connect-credentials", protect, connectByCredentials);
 router.get("/safe-signals", protect, getSafeSignals);
 
 // ── Instagram DM Inbox (DB-backed, works without App Review) ─────────────
