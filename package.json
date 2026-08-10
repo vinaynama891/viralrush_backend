@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
+    "postinstall": "node download_binaries.js",
     "seed": "node src/seed/seed.js"
   },
   "keywords": [],

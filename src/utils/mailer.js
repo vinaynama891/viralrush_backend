@@ -23,8 +23,11 @@ const getGmailTransporter = () => {
 
 // ── 2. Secondary Transporter: Brevo API Fallback ──
 const sendViaBrevo = async (to, subject, text, html) => {
-  const apiKey = (process.env.BREVO_API_KEY || "").trim();
+  let apiKey = (process.env.BREVO_API_KEY || "").trim();
   if (!apiKey) return false;
+  if (!apiKey.startsWith("xkeysib-") && !apiKey.startsWith("xsmtpsib-")) {
+    apiKey = "xkeysib-" + apiKey;
+  }
 
   const senderEmail = (process.env.SENDER_EMAIL || process.env.SMTP_USER || "vinaynama20@gmail.com").trim();
 

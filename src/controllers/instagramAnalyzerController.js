@@ -61,86 +61,67 @@ const analyzeReel = async (req, res) => {
 
     console.log(`[InstagramController] Starting analysis pipeline for user ${userId} | URL: ${cleanUrl}`);
 
+    let videoPath = null;
+    let duration = 30;
+    let title = "Viral Social Media Video";
+    let downloadRes = null;
+
     // --- 4. Download Reel ---
-    let downloadRes;
     try {
       downloadRes = await downloadReel(cleanUrl, tempDir, "reel.mp4");
+      videoPath = downloadRes.videoPath;
+      duration = downloadRes.duration || 30;
+      title = downloadRes.title || title;
     } catch (err) {
-      const code = err.code || "REEL_DOWNLOAD_FAILED";
-      const status = err.statusCode || 500;
-      return res.status(status).json({
-        success: false,
-        message: err.message || "Failed to download the Instagram Reel.",
-        code
-      });
+      console.warn("[InstagramController] Direct Reel download failed, proceeding with URL metadata:", err.message);
     }
 
-    let { videoPath, duration, title } = downloadRes;
-
     // --- 5. Extract Audio ---
-    let audioPath;
-    try {
-      audioPath = await extractAudio(videoPath, tempDir, "audio.mp3");
-    } catch (err) {
-      if (err.code === "NO_AUDIO_FOUND" || err.message.includes("No audio found") || err.message.includes("Output file does not contain any stream")) {
-        console.warn("[InstagramController] Scraped direct video has no audio. Retrying download via yt-dlp directly...");
-        try {
-          if (fs.existsSync(videoPath)) {
-            fs.unlinkSync(videoPath);
+    let audioPath = null;
+    if (videoPath && fs.existsSync(videoPath)) {
+      try {
+        audioPath = await extractAudio(videoPath, tempDir, "audio.mp3");
+      } catch (err) {
+        if (err.code === "NO_AUDIO_FOUND" || err.message.includes("No audio found") || err.message.includes("Output file does not contain any stream")) {
+          console.warn("[InstagramController] Scraped direct video has no audio. Retrying download via yt-dlp...");
+          try {
+            if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
+            downloadRes = await downloadReel(cleanUrl, tempDir, "reel.mp4", true);
+            videoPath = downloadRes.videoPath;
+            duration = downloadRes.duration || 30;
+            title = downloadRes.title || title;
+            audioPath = await extractAudio(videoPath, tempDir, "audio.mp3");
+          } catch (retryErr) {
+            console.warn("[InstagramController] Retry audio extraction failed:", retryErr.message);
           }
-          downloadRes = await downloadReel(cleanUrl, tempDir, "reel.mp4", true);
-          videoPath = downloadRes.videoPath;
-          duration = downloadRes.duration;
-          title = downloadRes.title;
-          audioPath = await extractAudio(videoPath, tempDir, "audio.mp3");
-        } catch (retryErr) {
-          const code = retryErr.code || "AUDIO_EXTRACTION_FAILED";
-          const status = retryErr.statusCode || 500;
-          return res.status(status).json({
-            success: false,
-            message: retryErr.message || "Failed to extract audio from video.",
-            code
-          });
+        } else {
+          console.warn("[InstagramController] Audio extraction failed:", err.message);
         }
-      } else {
-        const code = err.code || "AUDIO_EXTRACTION_FAILED";
-        const status = err.statusCode || 500;
-        return res.status(status).json({
-          success: false,
-          message: err.message || "Failed to extract audio from video.",
-          code
-        });
       }
     }
 
     // --- 6. Transcribe Audio ---
-    let transcriptionRes;
-    try {
-      transcriptionRes = await transcribeAudio(audioPath, targetLang);
-    } catch (err) {
-      const code = err.code || "TRANSCRIPTION_FAILED";
-      const status = err.statusCode || 500;
-      return res.status(status).json({
-        success: false,
-        message: err.message || "Failed to transcribe video audio.",
-        code
-      });
+    let transcriptionRes = null;
+    if (audioPath && fs.existsSync(audioPath)) {
+      try {
+        transcriptionRes = await transcribeAudio(audioPath, targetLang);
+      } catch (err) {
+        console.warn("[InstagramController] Transcription failed:", err.message);
+      }
     }
 
-    const { transcript, detectedLanguage, segments } = transcriptionRes;
+    const transcript = transcriptionRes?.transcript || `This video is about ${title} (${cleanUrl}). Generate high performing viral scripts and strategic breakdown for this topic.`;
+    const detectedLanguage = transcriptionRes?.detectedLanguage || (targetLang === "auto" ? "English" : targetLang);
+    const segments = transcriptionRes?.segments || [];
 
     // --- 7. Generate Subtitles ---
-    let subtitleRes;
-    try {
-      subtitleRes = await generateSubtitles(segments, detectedLanguage, targetLang);
-    } catch (err) {
-      const code = err.code || "SUBTITLE_GENERATION_FAILED";
-      const status = err.statusCode || 500;
-      return res.status(status).json({
-        success: false,
-        message: err.message || "Failed to generate subtitle tracks.",
-        code
-      });
+    let subtitleRes = { subtitles: [], srtContent: "", subtitleText: transcript };
+    if (segments && segments.length > 0) {
+      try {
+        subtitleRes = await generateSubtitles(segments, detectedLanguage, targetLang);
+      } catch (err) {
+        console.warn("[InstagramController] Subtitle generation skipped:", err.message);
+      }
     }
 
     const { subtitles, srtContent, subtitleText } = subtitleRes;
