@@ -565,12 +565,15 @@ Base all analysis on real ${platformName} trends and best practices.`;
     const platformName = platform.charAt(0).toUpperCase() + platform.slice(1);
 
     let langInstruction = "";
-    if (targetLanguage === "english") {
+    const langLower = String(targetLanguage || "auto").toLowerCase().trim();
+    if (langLower === "english") {
       langInstruction = `THE USER HAS EXPLICITLY REQUESTED THE SCRIPT AND CAPTION TO BE IN ENGLISH. YOU MUST WRITE ALL VALUES IN ENGLISH ONLY. NO HINDI OR OTHER LANGUAGES.`;
-    } else if (targetLanguage === "hindi") {
+    } else if (langLower === "hindi") {
       langInstruction = `THE USER HAS EXPLICITLY REQUESTED THE SCRIPT AND CAPTION TO BE IN HINDI. YOU MUST WRITE THE VALUES OF "originalScript", "title", "script.hook", "script.hooks" (both type and text fields), "script.structure", "script.fullScript", AND "caption" ENTIRELY IN HINDI USING DEVANAGARI SCRIPT (हिंदी देवनागरी लिपि). DO NOT WRITE IN ENGLISH.`;
-    } else if (targetLanguage === "hinglish") {
+    } else if (langLower === "hinglish") {
       langInstruction = `THE USER HAS EXPLICITLY REQUESTED THE SCRIPT AND CAPTION TO BE IN HINGLISH. YOU MUST WRITE THE VALUES OF "originalScript", "title", "script.hook", "script.hooks" (both type and text fields), "script.structure", "script.fullScript", AND "caption" ENTIRELY IN HINGLISH (HINDI WORDS WRITTEN USING LATIN/ENGLISH ALPHABET, E.g., "dosto aaj hum baat karenge...", "video ko skip mat karna", "kaise ho aap log?"). DO NOT WRITE IN HINDI DEVANAGARI SCRIPT OR PURE ENGLISH.`;
+    } else if (langLower !== "auto" && langLower !== "") {
+      langInstruction = `THE USER HAS EXPLICITLY REQUESTED THE SCRIPT AND CAPTION TO BE IN ${targetLanguage.toUpperCase()}. YOU MUST WRITE ALL TEXT VALUES ("originalScript", "title", "script.hook", "script.hooks", "script.structure", "script.fullScript", AND "caption") ENTIRELY IN ${targetLanguage}.`;
     } else {
       langInstruction = `AUTO-DETECT LANGUAGE RULE: Detect the primary language of the original video's Title and Description. If it is Hindi or Hinglish, write the values of "originalScript", "title", "script.hook", "script.hooks", "script.structure", "script.fullScript", and "caption" in that exact language/mix. If it is English, write them in English. Match the tone and language of the original creator.`;
     }
@@ -696,12 +699,15 @@ Return ONLY a valid JSON object matching this exact schema (no markdown formatti
     const platformName = platform.charAt(0).toUpperCase() + platform.slice(1);
 
     let langInstruction = "";
-    if (targetLanguage === "english") {
+    const langLower = String(targetLanguage || "auto").toLowerCase().trim();
+    if (langLower === "english") {
       langInstruction = `THE USER HAS EXPLICITLY REQUESTED THE HOOKS TO BE IN ENGLISH. YOU MUST WRITE ALL VALUES IN ENGLISH ONLY. NO HINDI OR OTHER LANGUAGES.`;
-    } else if (targetLanguage === "hindi") {
+    } else if (langLower === "hindi") {
       langInstruction = `THE USER HAS EXPLICITLY REQUESTED THE HOOKS TO BE IN HINDI. YOU MUST WRITE THE HOOK TEXTS ENTIRELY IN HINDI USING DEVANAGARI SCRIPT (हिंदी देवनागरी लिपि). DO NOT WRITE IN ENGLISH.`;
-    } else if (targetLanguage === "hinglish") {
+    } else if (langLower === "hinglish") {
       langInstruction = `THE USER HAS EXPLICITLY REQUESTED THE HOOKS TO BE IN HINGLISH. YOU MUST WRITE THE HOOK TEXTS ENTIRELY IN HINGLISH (HINDI WORDS WRITTEN USING LATIN/ENGLISH ALPHABET, E.g., "dosto aaj hum baat karenge..."). DO NOT WRITE IN HINDI DEVANAGARI SCRIPT OR PURE ENGLISH.`;
+    } else if (langLower !== "auto" && langLower !== "") {
+      langInstruction = `THE USER HAS EXPLICITLY REQUESTED THE HOOKS TO BE IN ${targetLanguage.toUpperCase()}. YOU MUST WRITE ALL HOOK TEXTS ENTIRELY IN ${targetLanguage}.`;
     } else {
       langInstruction = `AUTO-DETECT LANGUAGE RULE: Detect the primary language of the original video's Title and Description. If it is Hindi or Hinglish, write the hooks in that exact language/mix. Otherwise, write them in English.`;
     }
@@ -813,12 +819,15 @@ Return ONLY a valid JSON object matching this exact schema (no markdown formatti
     const platformName = platform.charAt(0).toUpperCase() + platform.slice(1);
 
     let langInstruction = "";
-    if (targetLanguage === "english") {
+    const langLower = String(targetLanguage || "auto").toLowerCase().trim();
+    if (langLower === "english") {
       langInstruction = `THE USER HAS EXPLICITLY REQUESTED THE SCRIPTS TO BE IN ENGLISH. YOU MUST WRITE ALL VALUES IN ENGLISH ONLY. NO HINDI OR OTHER LANGUAGES.`;
-    } else if (targetLanguage === "hindi") {
+    } else if (langLower === "hindi") {
       langInstruction = `THE USER HAS EXPLICITLY REQUESTED THE SCRIPTS TO BE IN HINDI. YOU MUST WRITE THE SCRIPT TEXTS ENTIRELY IN HINDI USING DEVANAGARI SCRIPT (हिंदी देवनागरी लिपि). DO NOT WRITE IN ENGLISH.`;
-    } else if (targetLanguage === "hinglish") {
+    } else if (langLower === "hinglish") {
       langInstruction = `THE USER HAS EXPLICITLY REQUESTED THE SCRIPTS TO BE IN HINGLISH. YOU MUST WRITE THE SCRIPT TEXTS ENTIRELY IN HINGLISH (HINDI WORDS WRITTEN USING LATIN/ENGLISH ALPHABET). DO NOT WRITE IN HINDI DEVANAGARI SCRIPT OR PURE ENGLISH.`;
+    } else if (langLower !== "auto" && langLower !== "") {
+      langInstruction = `THE USER HAS EXPLICITLY REQUESTED THE SCRIPTS TO BE IN ${targetLanguage.toUpperCase()}. YOU MUST WRITE ALL SCRIPT TEXTS ENTIRELY IN ${targetLanguage}.`;
     } else {
       langInstruction = `AUTO-DETECT LANGUAGE RULE: Detect the language of the selected hook. If it is Hindi or Hinglish, write the script variations in that exact language/mix.`;
     }
@@ -980,12 +989,15 @@ Return ONLY a valid JSON object matching this exact schema (no markdown formatti
     const platformName = platform.charAt(0).toUpperCase() + platform.slice(1);
 
     let langInstruction = "";
-    if (targetLanguage === "english") {
+    const langLower = String(targetLanguage || "auto").toLowerCase().trim();
+    if (langLower === "english") {
       langInstruction = `THE USER HAS EXPLICITLY REQUESTED THE CAPTION TO BE IN ENGLISH. YOU MUST WRITE THE CAPTION IN ENGLISH ONLY. NO HINDI OR OTHER LANGUAGES.`;
-    } else if (targetLanguage === "hindi") {
+    } else if (langLower === "hindi") {
       langInstruction = `THE USER HAS EXPLICITLY REQUESTED THE CAPTION TO BE IN HINDI. YOU MUST WRITE THE CAPTION ENTIRELY IN HINDI USING DEVANAGARI SCRIPT (हिंदी देवनागरी लिपि). DO NOT WRITE IN ENGLISH.`;
-    } else if (targetLanguage === "hinglish") {
+    } else if (langLower === "hinglish") {
       langInstruction = `THE USER HAS EXPLICITLY REQUESTED THE CAPTION TO BE IN HINGLISH. YOU MUST WRITE THE CAPTION ENTIRELY IN HINGLISH (HINDI WORDS WRITTEN USING LATIN/ENGLISH ALPHABET). DO NOT WRITE IN HINDI DEVANAGARI SCRIPT OR PURE ENGLISH.`;
+    } else if (langLower !== "auto" && langLower !== "") {
+      langInstruction = `THE USER HAS EXPLICITLY REQUESTED THE CAPTION TO BE IN ${targetLanguage.toUpperCase()}. YOU MUST WRITE ALL TITLE AND CAPTION TEXTS ENTIRELY IN ${targetLanguage}.`;
     } else {
       langInstruction = `AUTO-DETECT LANGUAGE RULE: Detect the language of the selected script. If it is Hindi or Hinglish, write the caption/description in that exact language/mix.`;
     }
@@ -1171,12 +1183,15 @@ Return ONLY a valid JSON object matching this exact schema (no markdown formatti
     const genAI = this._getClient();
 
     let langInstruction = "";
-    if (targetLanguage === "english") {
+    const langLower = String(targetLanguage || "hinglish").toLowerCase().trim();
+    if (langLower === "english") {
       langInstruction = `THE ENTIRE OUTPUT MUST BE IN ENGLISH ONLY. NO HINDI OR HINGLISH.`;
-    } else if (targetLanguage === "hindi") {
+    } else if (langLower === "hindi") {
       langInstruction = `THE ENTIRE OUTPUT (except keys and visual/audio cues in brackets) MUST BE IN HINDI (using Devanagari script, हिंदी देवनागरी लिपि). E.g. "नमस्ते दोस्तों, आज हम बात करेंगे..."`;
-    } else if (targetLanguage === "hinglish") {
+    } else if (langLower === "hinglish" || langLower === "auto") {
       langInstruction = `THE ENTIRE OUTPUT (except keys and visual/audio cues in brackets) MUST BE IN HINGLISH (Hindi words written in the English alphabet/Latin script). E.g., "Doston, kya aap bhi success paana chahte ho? Toh follow karo ye 3 rules."`;
+    } else if (langLower) {
+      langInstruction = `THE ENTIRE OUTPUT MUST BE IN ${targetLanguage.toUpperCase()} ONLY. Write all script titles, hooks, bodies, captions, and CTAs strictly in ${targetLanguage}.`;
     }
 
     const prompt = `You are a world-class viral video scriptwriter and social media growth hacker.

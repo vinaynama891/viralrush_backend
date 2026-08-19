@@ -10,12 +10,15 @@ async function generateScriptAndAnalysis({ transcript, selectedLanguage = "hingl
   const genAI = new GoogleGenAI({ apiKey });
 
   let langInstruction = "";
-  if (selectedLanguage === "english") {
-    langInstruction = `THE ENTIRE OUTPUT MUST BE IN ENGLISH ONLY. NO HINDI OR HINGLISH.`;
-  } else if (selectedLanguage === "hindi") {
-    langInstruction = `THE ENTIRE OUTPUT (except JSON keys and brackets) MUST BE IN HINDI (using Devanagari script, हिंदी देवनागरी लिपि). E.g. "नमस्ते दोस्तों, आज हम बात करेंगे..."`;
-  } else if (selectedLanguage === "hinglish" || selectedLanguage === "auto") {
-    langInstruction = `THE ENTIRE OUTPUT (except JSON keys and brackets) MUST BE IN HINGLISH (conversational Hindi words written using Latin/English alphabet). E.g., "Doston, kya aap bhi weight loss karna chahte ho? Toh follow karo ye 3 steps."`;
+  const langLower = String(selectedLanguage || "hinglish").toLowerCase().trim();
+  if (langLower === "english") {
+    langInstruction = `CRITICAL LANGUAGE RULE: THE ENTIRE OUTPUT MUST BE IN ENGLISH ONLY. NO HINDI OR HINGLISH.`;
+  } else if (langLower === "hindi") {
+    langInstruction = `CRITICAL LANGUAGE RULE: THE ENTIRE OUTPUT (except JSON keys and brackets) MUST BE IN HINDI (using Devanagari script, हिंदी देवनागरी लिपि). E.g. "नमस्ते दोस्तों, आज हम बात करेंगे..."`;
+  } else if (langLower === "hinglish" || langLower === "auto") {
+    langInstruction = `CRITICAL LANGUAGE RULE: THE ENTIRE OUTPUT (except JSON keys and brackets) MUST BE IN HINGLISH (conversational Hindi words written using Latin/English alphabet). E.g., "Doston, kya aap bhi weight loss karna chahte ho? Toh follow karo ye 3 steps."`;
+  } else if (langLower) {
+    langInstruction = `CRITICAL LANGUAGE RULE: THE ENTIRE OUTPUT (except JSON keys and brackets) MUST BE IN ${selectedLanguage.toUpperCase()} ONLY. Write all script titles, hooks, bodies, and CTAs strictly in ${selectedLanguage}.`;
   }
 
   const prompt = `You are an expert social media growth strategist and scriptwriter.
